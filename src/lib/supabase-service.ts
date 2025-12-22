@@ -345,6 +345,7 @@ export const SupabaseService = {
         const perOrderCost = amount / orders.length;
 
         await Promise.all(orders.map(async (order) => {
+            if (!supabase) return;
             const currentExpense = order.expense || 0;
             const newExpense = currentExpense + perOrderCost;
 
