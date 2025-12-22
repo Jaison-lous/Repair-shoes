@@ -136,7 +136,7 @@ export const StoreService = {
         if (!supabase) return null;
 
         try {
-            const { data, error } = await supabase
+            const { data, error } = (await supabase
                 .from('stores')
                 .update({
                     name: newName,
@@ -144,7 +144,7 @@ export const StoreService = {
                 } as any)
                 .eq('id', id)
                 .select()
-                .single();
+                .single()) as any;
 
             if (error) {
                 console.error('Error updating store:', error);
