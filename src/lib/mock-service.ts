@@ -1,4 +1,4 @@
-import { Complaint, Order, OrderStatus } from "./types";
+import { Complaint, Order, OrderStatus, OrderGroup, GroupExpense } from "./types";
 import { v4 as uuidv4 } from 'uuid';
 
 // Initial Mock Data
@@ -9,6 +9,9 @@ export const MOCK_COMPLAINTS: Complaint[] = [
     { id: '4', description: 'Stitching', default_price: 100 },
     { id: '5', description: 'Patch Work', default_price: 300 },
 ];
+
+let MOCK_GROUPS: OrderGroup[] = [];
+let MOCK_EXPENSES: GroupExpense[] = [];
 
 let MOCK_ORDERS: Order[] = [
     {
@@ -61,6 +64,21 @@ export const MockService = {
         return new Promise((resolve) => setTimeout(() => resolve(newOrder), 50));
     },
 
+    getNextSerialNumber: async (): Promise<string> => {
+        // Find the latest serial number from mock orders
+        const lastOrder = MOCK_ORDERS.filter(o => o.serial_number && o.serial_number.startsWith("LW")).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+
+        if (!lastOrder || !lastOrder.serial_number) return new Promise((resolve) => resolve("LW01"));
+
+        const match = lastOrder.serial_number.match(/LW(\d+)/i);
+        if (match && match[1]) {
+            const nextNum = parseInt(match[1], 10) + 1;
+            return new Promise((resolve) => resolve(`LW${nextNum.toString().padStart(2, '0')}`));
+        }
+
+        return new Promise((resolve) => resolve("LW01"));
+    },
+
     updateOrderStatus: async (id: string, status: OrderStatus): Promise<Order | null> => {
         const index = MOCK_ORDERS.findIndex(o => o.id === id);
         if (index === -1) return null;
@@ -88,5 +106,78 @@ export const MockService = {
 
         console.log("Mock WhatsApp Notification: Repair cost estimation is " + price);
         return new Promise((resolve) => setTimeout(() => resolve(MOCK_ORDERS[index]), 50));
+    },
+
+    updateHubPrice: async (id: string, price: number): Promise<Order | null> => {
+        const index = MOCK_ORDERS.findIndex(o => o.id === id);
+        if (index === -1) return null;
+
+        MOCK_ORDERS[index] = {
+            ...MOCK_ORDERS[index],
+            hub_price: price,
+            updated_at: new Date().toISOString()
+        };
+
+        return new Promise((resolve) => setTimeout(() => resolve(MOCK_ORDERS[index]), 50));
+        return new Promise((resolve) => setTimeout(() => resolve(MOCK_ORDERS[index]), 50));
+    },
+
+    // Group Service Methods
+    createGroup: async (name: string, orderIds: string[]): Promise<OrderGroup> => {
+        const newGroup: OrderGroup = {
+            id: uuidv4(),
+            name,
+            created_at: new Date().toISOString(),
+        };
+        MOCK_GROUPS.push(newGroup);
+
+        // Link orders
+        MOCK_ORDERS = MOCK_ORDERS.map(o => {
+            if (orderIds.includes(o.id)) {
+                return { ...o, group_id: newGroup.id };
+            }
+            return o;
+        });
+
+        return new Promise((resolve) => setTimeout(() => resolve(newGroup), 50));
+    },
+
+    getGroups: async (): Promise<OrderGroup[]> => {
+        // Hydrate groups with orders and expenses
+        const groups = MOCK_GROUPS.map(g => {
+            const orders = MOCK_ORDERS.filter(o => o.group_id === g.id);
+            const expenses = MOCK_EXPENSES.filter(e => e.group_id === g.id);
+            return { ...g, orders, expenses };
+        });
+        return new Promise((resolve) => setTimeout(() => resolve(groups), 50));
+    },
+
+    addGroupExpense: async (groupId: string, description: string, amount: number): Promise<void> => {
+        const expense: GroupExpense = {
+            id: uuidv4(),
+            group_id: groupId,
+            description,
+            amount,
+            created_at: new Date().toISOString()
+        };
+        MOCK_EXPENSES.push(expense);
+
+        // Update all orders in group
+        const groupOrders = MOCK_ORDERS.filter(o => o.group_id === groupId);
+        if (groupOrders.length > 0) {
+            const perOrder = amount / groupOrders.length;
+            groupOrders.forEach(o => {
+                const idx = MOCK_ORDERS.findIndex(mo => mo.id === o.id);
+                if (idx !== -1) {
+                    MOCK_ORDERS[idx] = {
+                        ...MOCK_ORDERS[idx],
+                        total_price: (MOCK_ORDERS[idx].total_price || 0) + perOrder,
+                        updated_at: new Date().toISOString()
+                    };
+                }
+            });
+        }
+
+        return new Promise((resolve) => setTimeout(() => resolve(), 50));
     }
 };

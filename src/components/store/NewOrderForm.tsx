@@ -3,29 +3,81 @@
 import { useEffect, useState } from "react";
 import { SupabaseService as MockService } from "@/lib/supabase-service";
 import { Complaint } from "@/lib/types";
-import { cn, POINTS_TO_CURRENCY } from "@/lib/utils";
-import { Check, Loader2, Plus } from "lucide-react";
+import { cn, POINTS_TO_CURRENCY, openWhatsApp } from "@/lib/utils";
+import { Check, Loader2, CheckCircle2, AlertCircle, X, Printer } from "lucide-react";
+import { addWeeks, format } from "date-fns";
+import { useRef } from "react";
 
-export function NewOrderForm({ onSuccess }: { onSuccess: () => void }) {
+// Toast notification component
+function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+    return (
+        <div className={cn(
+            "fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-2xl border backdrop-blur-md animate-slide-in-right flex items-center gap-3 min-w-[300px]",
+            type === 'success'
+                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-100"
+                : "bg-red-500/20 border-red-500/50 text-red-100"
+        )}>
+            {type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+            )}
+            <p className="flex-1 text-sm font-medium">{message}</p>
+            <button
+                onClick={onClose}
+                className="text-white/60 hover:text-white transition-colors shrink-0"
+            >
+                <X size={18} />
+            </button>
+        </div>
+    );
+}
+
+export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; storeId: string | null }) {
     const [complaints, setComplaints] = useState<Complaint[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [lastSubmittedOrder, setLastSubmittedOrder] = useState<any>(null);
+
+    // Validation State
+    const [errors, setErrors] = useState<{
+        clientName?: string;
+        whatsapp?: string;
+        shoeModel?: string;
+    }>({});
+
+    // Refs
+    const clientNameRef = useRef<HTMLInputElement>(null);
 
     // Form State
     const [clientName, setClientName] = useState("");
     const [whatsapp, setWhatsapp] = useState("");
     const [shoeModel, setShoeModel] = useState("");
     const [serialNumber, setSerialNumber] = useState("");
+    const [orderDate, setOrderDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [selectedComplaints, setSelectedComplaints] = useState<string[]>([]);
     const [customComplaint, setCustomComplaint] = useState("");
     const [customPrice, setCustomPrice] = useState("");
     const [priceUnknown, setPriceUnknown] = useState(false);
-    const [returnDate, setReturnDate] = useState("");
+    const [isFree, setIsFree] = useState(false);
+    const [returnDate, setReturnDate] = useState(format(addWeeks(new Date(), 2), "yyyy-MM-dd"));
+
+    // Auto-focus customer name field on mount
+    useEffect(() => {
+        clientNameRef.current?.focus();
+    }, []);
 
     useEffect(() => {
         MockService.getComplaints().then((data) => {
             setComplaints(data);
             setLoading(false);
+        });
+
+        // Auto-generate serial number
+        MockService.getNextSerialNumber().then((sn) => {
+            setSerialNumber(sn);
         });
     }, []);
 
@@ -35,38 +87,102 @@ export function NewOrderForm({ onSuccess }: { onSuccess: () => void }) {
         return acc + (c ? c.default_price : 0);
     }, 0);
 
-    const finalPrice = priceUnknown
+    const finalPrice = isFree
         ? 0
-        : totalPresetPrice + (customPrice ? parseFloat(customPrice) : 0);
+        : (priceUnknown
+            ? 0
+            : totalPresetPrice + (customPrice ? parseFloat(customPrice) : 0));
+
+    const resetForm = () => {
+        setClientName("");
+        setWhatsapp("");
+        setShoeModel("");
+        setSelectedComplaints([]);
+        setCustomComplaint("");
+        setCustomPrice("");
+        setPriceUnknown(false);
+        setIsFree(false);
+        setReturnDate(format(addWeeks(new Date(), 2), "yyyy-MM-dd"));
+
+        // Generate new serial number
+        MockService.getNextSerialNumber().then((sn) => {
+            setSerialNumber(sn);
+        });
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setSubmitting(true);
 
+        // Instant visual feedback - show success immediately
+        setSubmitting(true);
+        setShowSuccess(true);
+
+        // Store form data for potential retry
+        const orderData = {
+            customer_name: clientName,
+            whatsapp_number: whatsapp,
+            shoe_model: shoeModel,
+            serial_number: serialNumber,
+            status: "submitted" as const,
+            complaints: complaints.filter(c => selectedComplaints.includes(c.id)),
+            custom_complaint: customComplaint,
+            is_price_unknown: priceUnknown,
+            total_price: finalPrice,
+            expected_return_date: returnDate,
+            store_id: storeId || ''
+        };
+
+        // Open WhatsApp immediately (non-blocking)
+        const message = `Hello ${clientName}, your order for ${shoeModel} (SN: ${serialNumber}) has been received. We will notify you when it's ready!`;
+        setTimeout(() => {
+            openWhatsApp(whatsapp, message);
+        }, 100);
+
+        // Show success toast immediately
+        setToast({ message: "Order submitted successfully!", type: 'success' });
+
+        // Save to database in background
         try {
-            await MockService.createOrder({
-                customer_name: clientName,
-                whatsapp_number: whatsapp,
-                shoe_model: shoeModel,
-                serial_number: serialNumber,
-                status: "submitted",
-                // Map selected IDs to partial complaint objects if needed, 
-                // but for now our mock service just stores the list.
-                // In a real app we'd resolve these relationally.
-                // We'll pass the full array to context for now.
-                complaints: complaints.filter(c => selectedComplaints.includes(c.id)),
-                custom_complaint: customComplaint,
-                is_price_unknown: priceUnknown,
-                total_price: finalPrice,
-                expected_return_date: returnDate,
+            await MockService.createOrder(orderData);
+
+            // Store order data for printing
+            setLastSubmittedOrder({
+                ...orderData,
+                orderDate: orderDate,
+                finalPrice: finalPrice
             });
-            alert("Order Created! WhatsApp notification sent.");
-            onSuccess();
-        } catch (error) {
+
+            // After successful save, reset form and call onSuccess
+            setTimeout(() => {
+                setShowSuccess(false);
+                setSubmitting(false);
+                resetForm();
+                onSuccess();
+            }, 1500);
+
+        } catch (error: any) {
             console.error(error);
-            alert("Failed to create order");
-        } finally {
+
+            // Revert optimistic update on error
+            setShowSuccess(false);
             setSubmitting(false);
+
+            // Show error toast
+            if (error.message && error.message.includes("Duplicate Serial Number")) {
+                setToast({
+                    message: "Duplicate serial number. Generating new one...",
+                    type: 'error'
+                });
+                // Auto-retry with new serial number
+                MockService.getNextSerialNumber().then((sn) => {
+                    setSerialNumber(sn);
+                });
+            } else {
+                setToast({
+                    message: "Failed to save order. Please try again.",
+                    type: 'error'
+                });
+            }
         }
     };
 
@@ -76,157 +192,421 @@ export function NewOrderForm({ onSuccess }: { onSuccess: () => void }) {
         );
     };
 
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-blue-600" /></div>;
+    const handlePrint = () => {
+        window.print();
+    };
+
+    // Phone number formatting
+    const formatPhoneNumber = (value: string) => {
+        const cleaned = value.replace(/\D/g, '');
+        if (cleaned.length <= 10) {
+            return cleaned;
+        }
+        return cleaned.slice(0, 10);
+    };
+
+    const handleWhatsappChange = (value: string) => {
+        const formatted = formatPhoneNumber(value);
+        setWhatsapp(formatted);
+
+        // Validate phone number
+        if (formatted && formatted.length !== 10) {
+            setErrors(prev => ({ ...prev, whatsapp: 'Phone number must be 10 digits' }));
+        } else {
+            setErrors(prev => ({ ...prev, whatsapp: undefined }));
+        }
+    };
+
+    // Validate required fields
+    const validateForm = () => {
+        const newErrors: typeof errors = {};
+
+        if (!clientName.trim()) {
+            newErrors.clientName = 'Customer name is required';
+        }
+
+        if (!whatsapp.trim()) {
+            newErrors.whatsapp = 'WhatsApp number is required';
+        } else if (whatsapp.length !== 10) {
+            newErrors.whatsapp = 'Phone number must be 10 digits';
+        }
+
+        if (!shoeModel.trim()) {
+            newErrors.shoeModel = 'Shoe model is required';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-cyan-400" /></div>;
 
     return (
-        <div className="max-w-2xl mx-auto bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/20">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent mb-6">
-                New Repair Request
-            </h2>
+        <>
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Client Name</label>
-                        <input
-                            required
-                            className="w-full px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                            placeholder="John Doe"
-                            value={clientName}
-                            onChange={(e) => setClientName(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">WhatsApp Number</label>
-                        <input
-                            required
-                            type="tel"
-                            className="w-full px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                            placeholder="9876543210"
-                            value={whatsapp}
-                            onChange={(e) => setWhatsapp(e.target.value)}
-                        />
-                    </div>
-                </div>
+            <div className="max-w-2xl mx-auto glass-panel p-6 rounded-2xl relative z-10" suppressHydrationWarning>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-6 neon-text">
+                    New Repair Request
+                </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Shoe Model</label>
-                        <input
-                            required
-                            className="w-full px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                            placeholder="Nike Air Jordan"
-                            value={shoeModel}
-                            onChange={(e) => setShoeModel(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Serial Number <span className="text-slate-400 font-normal">(Optional)</span></label>
-                        <input
-                            className="w-full px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                            placeholder="SN-12345"
-                            value={serialNumber}
-                            onChange={(e) => setSerialNumber(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    <label className="text-sm font-medium text-slate-700">Select Complaints</label>
-                    <div className="grid grid-cols-2 gap-3">
-                        {complaints.map((c) => (
-                            <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => toggleComplaint(c.id)}
-                                className={cn(
-                                    "flex items-center justify-between p-3 rounded-xl border text-left transition-all",
-                                    selectedComplaints.includes(c.id)
-                                        ? "bg-blue-50 border-blue-500 text-blue-700 shadow-sm"
-                                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                                )}
-                            >
-                                <span className="text-sm font-medium">{c.description}</span>
-                                <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
-                                    {POINTS_TO_CURRENCY(c.default_price)}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="flex items-center space-x-2 text-sm font-medium text-slate-800">
-                        <input
-                            type="checkbox"
-                            checked={!!customComplaint}
-                            onChange={(e) => setCustomComplaint(e.target.checked ? "Custom Issue" : "")}
-                            className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>Custom Complaint / Other Issue</span>
-                    </label>
-
-                    {customComplaint && (
-                        <div className="space-y-3 pl-6 border-l-2 border-blue-200 mt-2">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4" suppressHydrationWarning>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Client Name *</label>
                             <input
-                                className="w-full px-4 py-2 rounded-lg bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm"
-                                placeholder="Describe the issue..."
-                                value={customComplaint}
-                                onChange={(e) => setCustomComplaint(e.target.value)}
+                                ref={clientNameRef}
+                                required
+                                className={cn(
+                                    "w-full px-4 py-2 rounded-lg bg-white/5 border text-white focus:outline-none focus:ring-1 transition-all placeholder:text-slate-600",
+                                    errors.clientName
+                                        ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/50"
+                                        : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/50"
+                                )}
+                                placeholder="John Doe"
+                                value={clientName}
+                                onChange={(e) => {
+                                    setClientName(e.target.value);
+                                    if (errors.clientName && e.target.value.trim()) {
+                                        setErrors(prev => ({ ...prev, clientName: undefined }));
+                                    }
+                                }}
+                                disabled={submitting}
                             />
-                            <div className="flex items-center space-x-3">
+                            {errors.clientName && (
+                                <p className="text-xs text-red-400">{errors.clientName}</p>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">WhatsApp Number *</label>
+                            <input
+                                required
+                                type="tel"
+                                maxLength={10}
+                                className={cn(
+                                    "w-full px-4 py-2 rounded-lg bg-white/5 border text-white focus:outline-none focus:ring-1 transition-all placeholder:text-slate-600",
+                                    errors.whatsapp
+                                        ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/50"
+                                        : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/50"
+                                )}
+                                placeholder="9876543210"
+                                value={whatsapp}
+                                onChange={(e) => handleWhatsappChange(e.target.value)}
+                                disabled={submitting}
+                            />
+                            {whatsapp && whatsapp.length === 10 && !errors.whatsapp && (
+                                <p className="text-xs text-emerald-400">✓ Valid phone number</p>
+                            )}
+                            {errors.whatsapp && (
+                                <p className="text-xs text-red-400">{errors.whatsapp}</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Shoe Model *</label>
+                            <input
+                                required
+                                className={cn(
+                                    "w-full px-4 py-2 rounded-lg bg-white/5 border text-white focus:outline-none focus:ring-1 transition-all placeholder:text-slate-600",
+                                    errors.shoeModel
+                                        ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/50"
+                                        : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/50"
+                                )}
+                                placeholder="Nike Air Jordan"
+                                value={shoeModel}
+                                onChange={(e) => {
+                                    setShoeModel(e.target.value);
+                                    if (errors.shoeModel && e.target.value.trim()) {
+                                        setErrors(prev => ({ ...prev, shoeModel: undefined }));
+                                    }
+                                }}
+                                disabled={submitting}
+                            />
+                            {errors.shoeModel && (
+                                <p className="text-xs text-red-400">{errors.shoeModel}</p>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Serial Number <span className="text-slate-500 font-normal">(Optional)</span></label>
+                            <input
+                                className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder:text-slate-600"
+                                placeholder="SN-12345"
+                                value={serialNumber}
+                                onChange={(e) => setSerialNumber(e.target.value)}
+                                disabled={submitting}
+                            />
+                            <div className="text-xs text-orange-400 mt-1 font-mono">Current: [{serialNumber || "Generating..."}]</div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="text-sm font-medium text-slate-300">Select Complaints</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {complaints.map((c) => (
+                                <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => toggleComplaint(c.id)}
+                                    disabled={submitting}
+                                    className={cn(
+                                        "flex items-center justify-between p-3 rounded-xl border text-left transition-all",
+                                        selectedComplaints.includes(c.id)
+                                            ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.15)]"
+                                            : "bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200",
+                                        submitting && "opacity-50 cursor-not-allowed"
+                                    )}
+                                >
+                                    <span className="text-sm font-medium">{c.description}</span>
+                                    <span className="text-xs bg-white/10 px-2 py-1 rounded text-slate-300 border border-white/5 mx-2">
+                                        {POINTS_TO_CURRENCY(c.default_price)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 p-4 bg-white/5 rounded-xl border border-white/10">
+                        <label className="flex items-center space-x-2 text-sm font-medium text-slate-300 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={!!customComplaint}
+                                onChange={(e) => setCustomComplaint(e.target.checked ? "Custom Issue" : "")}
+                                className="rounded border-white/20 bg-white/10 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
+                                disabled={submitting}
+                            />
+                            <span>Custom Complaint / Other Issue</span>
+                        </label>
+
+                        {customComplaint && (
+                            <div className="space-y-3 pl-6 border-l-2 border-white/10 mt-2">
                                 <input
-                                    type="number"
-                                    disabled={priceUnknown}
-                                    className="flex-1 px-4 py-2 rounded-lg bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500 text-sm"
-                                    placeholder="Estimated Cost"
-                                    value={customPrice}
-                                    onChange={(e) => setCustomPrice(e.target.value)}
+                                    className="w-full px-4 py-2 rounded-lg bg-black/20 border border-white/10 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500 text-sm text-white"
+                                    placeholder="Describe the issue..."
+                                    value={customComplaint}
+                                    onChange={(e) => setCustomComplaint(e.target.value)}
+                                    disabled={submitting}
                                 />
-                                <label className="flex items-center space-x-2 text-sm text-slate-600 whitespace-nowrap">
+                                <div className="flex items-center space-x-3">
                                     <input
-                                        type="checkbox"
-                                        checked={priceUnknown}
-                                        onChange={(e) => setPriceUnknown(e.target.checked)}
-                                        className="rounded text-blue-600 focus:ring-blue-500"
+                                        type="number"
+                                        disabled={priceUnknown || submitting}
+                                        className="flex-1 px-4 py-2 rounded-lg bg-black/20 border border-white/10 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500 text-sm text-white"
+                                        placeholder="Estimated Cost"
+                                        value={customPrice}
+                                        onChange={(e) => setCustomPrice(e.target.value)}
                                     />
-                                    <span>Price Unknown</span>
-                                </label>
+                                    <label className="flex items-center space-x-2 text-sm text-slate-400 whitespace-nowrap cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={priceUnknown}
+                                            onChange={(e) => setPriceUnknown(e.target.checked)}
+                                            className="rounded border-white/20 bg-white/10 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
+                                            disabled={submitting}
+                                        />
+                                        <span>Price Unknown</span>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Free Service Checkbox */}
+                    <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={isFree}
+                                onChange={(e) => {
+                                    setIsFree(e.target.checked);
+                                    if (e.target.checked) setPriceUnknown(false);
+                                }}
+                                className="w-5 h-5 rounded border-emerald-500/30 bg-emerald-500/10 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+                                disabled={submitting}
+                            />
+                            <div>
+                                <span className="block text-sm font-bold text-emerald-400">Free Service / Warranty</span>
+                                <span className="block text-xs text-emerald-500/60">Customer will not be charged. Hub can still log cost.</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6 items-end">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Order Date</label>
+                            <input
+                                type="date"
+                                className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-500 focus:outline-none cursor-not-allowed"
+                                value={orderDate}
+                                readOnly
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Return Date</label>
+                            <input
+                                required
+                                type="date"
+                                className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 color-scheme-dark"
+                                value={returnDate}
+                                onChange={(e) => setReturnDate(e.target.value)}
+                                style={{ colorScheme: "dark" }}
+                                disabled={submitting}
+                            />
+                        </div>
+
+                        <div className="text-right col-span-2 md:col-span-1 md:col-start-2">
+                            <div className="text-sm text-slate-400 mb-1">Total Estimate</div>
+                            <div className={cn("text-3xl font-bold neon-text", priceUnknown ? "text-orange-400" : isFree ? "text-emerald-400" : "text-emerald-400")}>
+                                {isFree ? "FREE" : (priceUnknown ? "TBD" : POINTS_TO_CURRENCY(finalPrice))}
                             </div>
                         </div>
-                    )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-6 items-end">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Return Date</label>
-                        <input
-                            required
-                            type="date"
-                            className="w-full px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={returnDate}
-                            onChange={(e) => setReturnDate(e.target.value)}
-                        />
                     </div>
 
-                    <div className="text-right">
-                        <div className="text-sm text-slate-500 mb-1">Total Estimate</div>
-                        <div className={cn("text-3xl font-bold", priceUnknown ? "text-orange-500" : "text-slate-800")}>
-                            {priceUnknown ? "TBD" : POINTS_TO_CURRENCY(finalPrice)}
+                    {/* Print Button - Always visible above submit */}
+                    <button
+                        onClick={() => {
+                            // Store current form data for printing
+                            setLastSubmittedOrder({
+                                customer_name: clientName,
+                                whatsapp_number: whatsapp,
+                                shoe_model: shoeModel,
+                                serial_number: serialNumber,
+                                complaints: complaints.filter(c => selectedComplaints.includes(c.id)),
+                                custom_complaint: customComplaint,
+                                is_price_unknown: priceUnknown,
+                                orderDate: orderDate,
+                                expected_return_date: returnDate,
+                                finalPrice: finalPrice
+                            });
+                            // Trigger print after a short delay to ensure state is updated
+                            setTimeout(() => window.print(), 100);
+                        }}
+                        type="button"
+                        disabled={!clientName || !whatsapp || !shoeModel}
+                        className="w-full font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 border bg-white/5 hover:bg-white/10 border-white/10 hover:border-white/20 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Printer size={20} />
+                        <span>Print Receipt</span>
+                    </button>
+
+                    <button
+                        disabled={submitting}
+                        type="submit"
+                        className={cn(
+                            "w-full font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 border",
+                            showSuccess
+                                ? "bg-emerald-500 border-emerald-400/50 shadow-emerald-500/30 scale-[0.98]"
+                                : "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-500/20 active:scale-[0.98] border-cyan-400/20",
+                            "text-white"
+                        )}
+                    >
+                        {showSuccess ? (
+                            <>
+                                <CheckCircle2 className="animate-bounce" />
+                                <span>Order Submitted!</span>
+                            </>
+                        ) : submitting ? (
+                            <>
+                                <Loader2 className="animate-spin" />
+                                <span>Submitting...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Check />
+                                <span>Submit Order & Notify Client</span>
+                            </>
+                        )}
+                    </button>
+
+                </form>
+            </div>
+
+            {/* Hidden Print Receipt */}
+            {lastSubmittedOrder && (
+                <div className="hidden print:block print:p-8">
+                    <style dangerouslySetInnerHTML={{
+                        __html: `
+                        @media print {
+                            body * { visibility: hidden; }
+                            .print-receipt, .print-receipt * { visibility: visible; }
+                            .print-receipt { position: absolute; left: 0; top: 0; width: 100%; }
+                        }
+                    ` }} />
+                    <div className="print-receipt max-w-md mx-auto">
+                        <div className="text-center mb-6">
+                            <h1 className="text-2xl font-bold">Shoe Repair Order</h1>
+                            <p className="text-sm text-gray-600 mt-1">{new Date(lastSubmittedOrder.orderDate).toLocaleDateString()}</p>
+                        </div>
+
+                        <div className="border-t-2 border-b-2 border-black py-4 mb-4">
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                    <p className="font-semibold">Customer:</p>
+                                    <p>{lastSubmittedOrder.customer_name}</p>
+                                </div>
+                                <div>
+                                    <p className="font-semibold">WhatsApp:</p>
+                                    <p>{lastSubmittedOrder.whatsapp_number}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="font-semibold text-sm">Shoe Model:</p>
+                            <p className="text-lg">{lastSubmittedOrder.shoe_model}</p>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="font-semibold text-sm">Serial Number:</p>
+                            <p className="text-lg font-mono">{lastSubmittedOrder.serial_number}</p>
+                        </div>
+
+                        {lastSubmittedOrder.complaints && lastSubmittedOrder.complaints.length > 0 && (
+                            <div className="mb-4">
+                                <p className="font-semibold text-sm mb-2">Services:</p>
+                                <ul className="list-disc list-inside">
+                                    {lastSubmittedOrder.complaints.map((c: any, idx: number) => (
+                                        <li key={idx} className="text-sm">{c.description}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {lastSubmittedOrder.custom_complaint && (
+                            <div className="mb-4">
+                                <p className="font-semibold text-sm">Custom Service:</p>
+                                <p className="text-sm">{lastSubmittedOrder.custom_complaint}</p>
+                            </div>
+                        )}
+
+                        <div className="mb-4">
+                            <p className="font-semibold text-sm">Expected Return:</p>
+                            <p>{new Date(lastSubmittedOrder.expected_return_date).toLocaleDateString()}</p>
+                        </div>
+
+                        <div className="border-t-2 border-black pt-4 mt-4">
+                            <div className="flex justify-between items-center">
+                                <p className="text-lg font-bold">Total Price:</p>
+                                <p className="text-2xl font-bold">
+                                    {lastSubmittedOrder.is_price_unknown ? 'TBD' : POINTS_TO_CURRENCY(lastSubmittedOrder.finalPrice)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 text-center text-xs text-gray-600">
+                            <p>Thank you for your business!</p>
+                            <p className="mt-1">We will notify you when your shoes are ready</p>
                         </div>
                     </div>
                 </div>
-
-                <button
-                    disabled={submitting}
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-all flex items-center justify-center space-x-2"
-                >
-                    {submitting ? <Loader2 className="animate-spin" /> : <Check />}
-                    <span>Submit Order & Notify Client</span>
-                </button>
-
-            </form>
-        </div>
+            )}
+        </>
     );
 }

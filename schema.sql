@@ -16,10 +16,12 @@ create table orders (
   customer_name text not null,
   whatsapp_number text not null,
   shoe_model text not null,
-  serial_number text,
+  serial_number text unique,
   custom_complaint text,
   is_price_unknown boolean default false,
   total_price numeric(10, 2) default 0,
+  hub_price numeric(10, 2) default 0,
+  expense numeric(10, 2) default 0,
   status order_status default 'submitted',
   expected_return_date date,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -34,9 +36,24 @@ create table order_complaints (
 );
 
 -- Insert some dummy data for complaints
-insert into complaints (description, default_price) values
-('Heel Replacement', 450),
-('Sole Pasting', 250),
-('Full Polish', 150),
 ('Stitching', 100),
 ('Patch Work', 300);
+
+-- Order Groups
+create table order_groups (
+  id uuid default uuid_generate_v4() primary key,
+  name text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Group Expenses
+create table group_expenses (
+  id uuid default uuid_generate_v4() primary key,
+  group_id uuid references order_groups(id) on delete cascade,
+  description text not null,
+  amount numeric(10, 2) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Link Orders to Groups
+alter table orders add column group_id uuid references order_groups(id) on delete set null;

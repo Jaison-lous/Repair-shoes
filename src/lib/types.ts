@@ -1,4 +1,12 @@
-export type OrderStatus = 'submitted' | 'received' | 'completed' | 'departure' | 'in_store';
+export type OrderStatus = 'submitted' | 'shipped' | 'received' | 'completed' | 'reshipped' | 'in_store';
+
+export interface Store {
+    id: string;
+    name: string;
+    password_hash: string;
+    created_at: string;
+    updated_at?: string;
+}
 
 export interface Complaint {
     id: string;
@@ -18,23 +26,49 @@ export interface Order {
     customer_name: string;
     whatsapp_number: string;
     shoe_model: string;
-    serial_number?: string;
+    serial_number: string;
 
     // Custom complaint logic
     custom_complaint?: string;
-    is_price_unknown: boolean;
+    is_price_unknown?: boolean;
 
     // Money
+    display_price?: number; // Optional UI helper if needed
     total_price: number;
+    hub_price?: number;
+    expense?: number;
 
     // Status and Dates
     status: OrderStatus;
     expected_return_date: string; // ISO date string
     created_at: string;
     updated_at: string;
+    is_completed?: boolean;
+
+    // Store relation
+    store_id: string;
+    store_name?: string; // Populated via join
 
     // Relations (for frontend state)
     complaints?: Complaint[];
+    group_id?: string;
+    group?: OrderGroup;
+}
+
+export interface OrderGroup {
+    id: string;
+    name: string;
+    created_at: string;
+    expenses?: GroupExpense[];
+    orders?: Order[];
+}
+
+export interface GroupExpense {
+    id: string;
+    group_id: string;
+    description: string;
+    amount: number;
+    created_at: string;
 }
 
 // For the Kanban board

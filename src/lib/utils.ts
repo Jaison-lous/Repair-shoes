@@ -13,3 +13,11 @@ export const POINTS_TO_CURRENCY = (amount: number) => {
         maximumFractionDigits: 0,
     }).format(amount);
 };
+
+export const openWhatsApp = (phone: string, message: string) => {
+    // Remove non-digits
+    const cleanPhone = phone.replace(/\D/g, '');
+    const encodedMessage = encodeURIComponent(message);
+    const url = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
+    window.open(url, '_blank');
+};
