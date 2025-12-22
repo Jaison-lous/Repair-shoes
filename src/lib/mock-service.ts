@@ -19,26 +19,30 @@ let MOCK_ORDERS: Order[] = [
         customer_name: 'John Doe',
         whatsapp_number: '9876543210',
         shoe_model: 'Nike Air Max',
+        serial_number: 'LW01',
         status: 'submitted',
         total_price: 450,
         is_price_unknown: false,
         expected_return_date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        complaints: [MOCK_COMPLAINTS[0]]
+        complaints: [MOCK_COMPLAINTS[0]],
+        store_id: ''
     },
     {
         id: '102',
         customer_name: 'Jane Smith',
         whatsapp_number: '8765432109',
         shoe_model: 'Adidas Ultraboost',
+        serial_number: 'LW02',
         status: 'in_store',
         total_price: 0,
         is_price_unknown: true, // Example of unknown price
         expected_return_date: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        complaints: []
+        complaints: [],
+        store_id: ''
     }
 ];
 
