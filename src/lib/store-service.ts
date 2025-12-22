@@ -30,12 +30,12 @@ export const StoreService = {
             // Simple password hashing (in production, use bcrypt on backend)
             const password_hash = btoa(password); // Base64 encoding (NOT secure for production)
 
-            const { data, error } = await supabase
-                .from('stores')
+            const { data, error } = await (supabase
+                .from('stores') as any)
                 .insert({
                     name,
                     password_hash
-                } as any)
+                })
                 .select()
                 .single();
 
@@ -60,9 +60,9 @@ export const StoreService = {
 
         try {
             // Get all stores
-            const { data: stores, error } = await supabase
-                .from('stores')
-                .select('*') as any;
+            const { data: stores, error } = await (supabase
+                .from('stores') as any)
+                .select('*');
 
             if (error || !stores) {
                 console.error('Error fetching stores:', error);
@@ -87,8 +87,8 @@ export const StoreService = {
         if (!supabase) return [];
 
         try {
-            const { data, error } = await supabase
-                .from('stores')
+            const { data, error } = await (supabase
+                .from('stores') as any)
                 .select('*')
                 .order('created_at', { ascending: true });
 
@@ -111,8 +111,8 @@ export const StoreService = {
         if (!supabase) return null;
 
         try {
-            const { data, error } = await supabase
-                .from('stores')
+            const { data, error } = await (supabase
+                .from('stores') as any)
                 .select('*')
                 .eq('id', id)
                 .single();
@@ -136,15 +136,15 @@ export const StoreService = {
         if (!supabase) return null;
 
         try {
-            const { data, error } = (await supabase
-                .from('stores')
+            const { data, error } = await (supabase
+                .from('stores') as any)
                 .update({
                     name: newName,
                     updated_at: new Date().toISOString()
-                } as any)
+                })
                 .eq('id', id)
                 .select()
-                .single()) as any;
+                .single();
 
             if (error) {
                 console.error('Error updating store:', error);
@@ -166,8 +166,8 @@ export const StoreService = {
 
         try {
             // Check if store has orders
-            const { data: orders, error: ordersError } = await supabase
-                .from('orders')
+            const { data: orders, error: ordersError } = await (supabase
+                .from('orders') as any)
                 .select('id')
                 .eq('store_id', id)
                 .limit(1);
@@ -183,8 +183,8 @@ export const StoreService = {
             }
 
             // Delete store
-            const { error } = await supabase
-                .from('stores')
+            const { error } = await (supabase
+                .from('stores') as any)
                 .delete()
                 .eq('id', id);
 
@@ -207,8 +207,8 @@ export const StoreService = {
         if (!supabase) return 0;
 
         try {
-            const { count, error } = await supabase
-                .from('orders')
+            const { count, error } = await (supabase
+                .from('orders') as any)
                 .select('*', { count: 'exact', head: true })
                 .eq('store_id', storeId);
 
