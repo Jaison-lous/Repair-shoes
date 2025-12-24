@@ -13,6 +13,7 @@ interface KanbanBoardProps {
     onCardClick?: (order: Order) => void;
     allowPriceEdit?: boolean;
     onPriceUpdate?: (orderId: string, newPrice: number) => void;
+    onHubPriceUpdate?: (orderId: string, newPrice: number) => void;
     onExpenseUpdate?: (orderId: string, newExpense: number) => void;
     onBalancePayment?: (orderId: string, amount: number, paymentMethod: string) => void;
     userRole?: 'store' | 'hub';
@@ -32,7 +33,7 @@ const COLUMNS: { id: OrderStatus; title: string }[] = [
     { id: 'in_store', title: 'In Store' },
 ];
 
-export function KanbanBoard({ orders, onOrderMove, readOnly = false, onCardClick, allowPriceEdit, onPriceUpdate, onExpenseUpdate, onBalancePayment, userRole = 'store', onGroupExpense, onCreateGroup, onBulkStageChange, onCompletionToggle, showStoreBadge = false }: KanbanBoardProps) {
+export function KanbanBoard({ orders, onOrderMove, readOnly = false, onCardClick, allowPriceEdit, onPriceUpdate, onHubPriceUpdate, onExpenseUpdate, onBalancePayment, userRole = 'store', onGroupExpense, onCreateGroup, onBulkStageChange, onCompletionToggle, showStoreBadge = false }: KanbanBoardProps) {
 
     // Filter out completed orders from Kanban view
     const activeOrders = orders.filter(o => !o.is_completed);
@@ -452,7 +453,7 @@ export function KanbanBoard({ orders, onOrderMove, readOnly = false, onCardClick
                     onClose={() => setSelectedOrderForModal(null)}
                     userRole={userRole}
                     allowPriceEdit={allowPriceEdit}
-                    onPriceUpdate={onPriceUpdate}
+                    onPriceUpdate={onHubPriceUpdate || onPriceUpdate}
                     onExpenseUpdate={onExpenseUpdate}
                     onBalancePayment={onBalancePayment}
                 />

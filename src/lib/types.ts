@@ -48,6 +48,7 @@ export interface Order {
     created_at: string;
     updated_at: string;
     is_completed?: boolean;
+    is_in_house?: boolean; // If true, order is handled in-house, not sent to hub
 
     // Store relation
     store_id: string;

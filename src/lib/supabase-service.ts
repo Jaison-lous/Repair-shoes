@@ -82,7 +82,8 @@ export const SupabaseService = {
                 expected_return_date: order.expected_return_date,
                 store_id: order.store_id,
                 advance_amount: order.advance_amount || 0,
-                payment_method: order.payment_method || null
+                payment_method: order.payment_method || null,
+                is_in_house: order.is_in_house || false
             })
             .select()
             .single();

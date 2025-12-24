@@ -328,6 +328,25 @@ export default function StorePage() {
         }
     };
 
+    const handleHubPriceUpdate = async (orderId: string, newPrice: number) => {
+        // Optimistic update - show new hub price immediately
+        setOrders(prevOrders =>
+            prevOrders.map(order =>
+                order.id === orderId
+                    ? { ...order, hub_price: newPrice }
+                    : order
+            )
+        );
+
+        // Sync with database in background
+        try {
+            await MockService.updateHubPrice(orderId, newPrice);
+        } catch (error) {
+            // Revert on error and refresh from server
+            handleRefresh();
+        }
+    };
+
     const handleExpenseUpdate = async (orderId: string, newExpense: number) => {
         // Optimistic update - show new expense immediately
         setOrders(prevOrders =>
@@ -571,6 +590,7 @@ export default function StorePage() {
                             userRole="store"
                             allowPriceEdit={true}
                             onPriceUpdate={handlePriceUpdate}
+                            onHubPriceUpdate={handleHubPriceUpdate}
                             onExpenseUpdate={handleExpenseUpdate}
                             onBalancePayment={handleBalancePayment}
                             onGroupExpense={handleGroupExpense}

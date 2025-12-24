@@ -83,6 +83,17 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                     </div>
                 </div>
 
+                {/* In-House Repair Badge */}
+                {optimisticOrder.is_in_house && (
+                    <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-lg">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                            <span className="text-sm font-bold text-purple-400">In-House Repair</span>
+                        </div>
+                        <p className="text-xs text-purple-500/70 mt-1">This order is being handled in-store and is not sent to the Central Hub.</p>
+                    </div>
+                )}
+
                 {/* Order Details */}
                 <div className="space-y-3">
                     <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Order Details</h4>
@@ -236,8 +247,10 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
 
                     {/* Hub Price */}
                     <div className="bg-purple-500/10 border border-purple-500/30 p-4 rounded-lg">
-                        <p className="text-xs text-purple-300 uppercase font-semibold mb-2">Hub Price</p>
-                        {allowPriceEdit && onPriceUpdate && userRole === 'hub' ? (
+                        <p className="text-xs text-purple-300 uppercase font-semibold mb-2">
+                            Hub Price {optimisticOrder.is_in_house && <span className="text-purple-400">(In-House Cost)</span>}
+                        </p>
+                        {allowPriceEdit && onPriceUpdate && (userRole === 'hub' || (userRole === 'store' && optimisticOrder.is_in_house)) ? (
                             <div className="space-y-2">
                                 <input
                                     type="number"
@@ -268,7 +281,7 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                                         }}
                                         className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-all"
                                     >
-                                        Save Hub Price
+                                        Save {optimisticOrder.is_in_house ? 'Cost' : 'Hub Price'}
                                     </button>
                                 )}
                             </div>

@@ -65,6 +65,7 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
     const [returnDate, setReturnDate] = useState(format(addWeeks(new Date(), 2), "yyyy-MM-dd"));
     const [advanceAmount, setAdvanceAmount] = useState("");
     const [paymentMethod, setPaymentMethod] = useState<string>("");
+    const [isInHouse, setIsInHouse] = useState(false);
 
     // Auto-focus customer name field on mount
     useEffect(() => {
@@ -107,6 +108,7 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
         setReturnDate(format(addWeeks(new Date(), 2), "yyyy-MM-dd"));
         setAdvanceAmount("");
         setPaymentMethod("");
+        setIsInHouse(false);
 
         // Generate new serial number
         MockService.getNextSerialNumber().then((sn) => {
@@ -135,7 +137,8 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
             expected_return_date: returnDate,
             store_id: storeId || '',
             advance_amount: advanceAmount ? parseFloat(advanceAmount) : 0,
-            payment_method: paymentMethod || null
+            payment_method: paymentMethod || null,
+            is_in_house: isInHouse
         };
 
         // Open WhatsApp immediately (non-blocking)
@@ -461,6 +464,23 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                                 Balance Due: {POINTS_TO_CURRENCY(Math.max(0, finalPrice - parseFloat(advanceAmount)))}
                             </div>
                         )}
+                    </div>
+
+                    {/* In-House Repair Checkbox */}
+                    <div className="p-4 bg-purple-500/5 rounded-xl border border-purple-500/10">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={isInHouse}
+                                onChange={(e) => setIsInHouse(e.target.checked)}
+                                className="w-5 h-5 rounded border-purple-500/30 bg-purple-500/10 text-purple-500 focus:ring-purple-500 focus:ring-offset-0"
+                                disabled={submitting}
+                            />
+                            <div>
+                                <span className="block text-sm font-bold text-purple-400">In-House Repair</span>
+                                <span className="block text-xs text-purple-500/60">Don't send to Central Hub. Handle repair in-store.</span>
+                            </div>
+                        </label>
                     </div>
 
                     {/* Free Service Checkbox */}

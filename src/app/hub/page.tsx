@@ -22,10 +22,11 @@ export default function HubPage() {
         StoreService.getAllStores().then(setStores);
     }, [refreshKey]);
 
-    // Filter orders by selected store
-    const filteredOrders = selectedStoreId === 'all'
+    // Filter orders by selected store and exclude in-house orders
+    const filteredOrders = (selectedStoreId === 'all'
         ? orders
-        : orders.filter(o => o.store_id === selectedStoreId);
+        : orders.filter(o => o.store_id === selectedStoreId)
+    ).filter(o => !o.is_in_house); // Exclude in-house orders from hub view
 
     const handleRefresh = () => setRefreshKey(k => k + 1);
 
