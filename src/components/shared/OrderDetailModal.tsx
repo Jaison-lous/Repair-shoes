@@ -29,6 +29,7 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
     });
 
     const profit = (optimisticOrder.total_price || 0) - (optimisticOrder.hub_price || 0) - (optimisticOrder.expense || 0);
+    const balanceDue = (optimisticOrder.total_price || 0) - (optimisticOrder.advance_amount || 0);
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -290,6 +291,43 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                                 )}>
                                     {POINTS_TO_CURRENCY(profit)}
                                 </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Advance Payment Information */}
+                    {optimisticOrder.advance_amount && optimisticOrder.advance_amount > 0 && (
+                        <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-lg">
+                            <p className="text-xs text-blue-300 uppercase font-semibold mb-2">Advance Payment</p>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-slate-400">Amount Paid:</span>
+                                    <span className="text-xl font-mono text-white font-bold">
+                                        {POINTS_TO_CURRENCY(optimisticOrder.advance_amount)}
+                                    </span>
+                                </div>
+                                {optimisticOrder.payment_method && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-slate-400">Payment Method:</span>
+                                        <span className="text-sm text-blue-300 font-medium">
+                                            {optimisticOrder.payment_method}
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center pt-2 border-t border-blue-500/20">
+                                    <span className="text-sm text-slate-300 font-semibold">Balance Due:</span>
+                                    <span className={cn(
+                                        "text-xl font-mono font-bold",
+                                        balanceDue <= 0 ? "text-emerald-400" : "text-orange-400"
+                                    )}>
+                                        {POINTS_TO_CURRENCY(Math.max(0, balanceDue))}
+                                    </span>
+                                </div>
+                                {balanceDue <= 0 && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 text-center">
+                                        ✓ Fully Paid
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

@@ -63,6 +63,8 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
     const [priceUnknown, setPriceUnknown] = useState(false);
     const [isFree, setIsFree] = useState(false);
     const [returnDate, setReturnDate] = useState(format(addWeeks(new Date(), 2), "yyyy-MM-dd"));
+    const [advanceAmount, setAdvanceAmount] = useState("");
+    const [paymentMethod, setPaymentMethod] = useState<string>("");
 
     // Auto-focus customer name field on mount
     useEffect(() => {
@@ -103,6 +105,8 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
         setPriceUnknown(false);
         setIsFree(false);
         setReturnDate(format(addWeeks(new Date(), 2), "yyyy-MM-dd"));
+        setAdvanceAmount("");
+        setPaymentMethod("");
 
         // Generate new serial number
         MockService.getNextSerialNumber().then((sn) => {
@@ -129,7 +133,9 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
             is_price_unknown: priceUnknown,
             total_price: finalPrice,
             expected_return_date: returnDate,
-            store_id: storeId || ''
+            store_id: storeId || '',
+            advance_amount: advanceAmount ? parseFloat(advanceAmount) : 0,
+            payment_method: paymentMethod || null
         };
 
         // Open WhatsApp immediately (non-blocking)
@@ -418,6 +424,45 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                         )}
                     </div>
 
+                    {/* Advance Payment Section */}
+                    <div className="space-y-3 p-4 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                        <label className="text-sm font-medium text-slate-300">Advance Payment</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <label className="text-xs text-slate-400">Amount</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
+                                    placeholder="0.00"
+                                    value={advanceAmount}
+                                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                                    disabled={submitting}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs text-slate-400">Payment Method</label>
+                                <select
+                                    className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                                    value={paymentMethod}
+                                    onChange={(e) => setPaymentMethod(e.target.value)}
+                                    disabled={submitting || !advanceAmount}
+                                >
+                                    <option value="">Select method</option>
+                                    <option value="Google Pay">Google Pay</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="Card">Card</option>
+                                </select>
+                            </div>
+                        </div>
+                        {advanceAmount && parseFloat(advanceAmount) > 0 && (
+                            <div className="text-xs text-blue-300 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20">
+                                Balance Due: {POINTS_TO_CURRENCY(Math.max(0, finalPrice - parseFloat(advanceAmount)))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Free Service Checkbox */}
                     <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
                         <label className="flex items-center space-x-3 cursor-pointer">
@@ -483,7 +528,9 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                                 is_price_unknown: priceUnknown,
                                 orderDate: orderDate,
                                 expected_return_date: returnDate,
-                                finalPrice: finalPrice
+                                finalPrice: finalPrice,
+                                advance_amount: advanceAmount ? parseFloat(advanceAmount) : 0,
+                                payment_method: paymentMethod || null
                             });
                             // Trigger print after a short delay to ensure state is updated
                             setTimeout(() => window.print(), 100);
@@ -598,6 +645,22 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                                     {lastSubmittedOrder.is_price_unknown ? 'TBD' : POINTS_TO_CURRENCY(lastSubmittedOrder.finalPrice)}
                                 </p>
                             </div>
+                            {lastSubmittedOrder.advance_amount && lastSubmittedOrder.advance_amount > 0 && (
+                                <>
+                                    <div className="flex justify-between items-center mt-2">
+                                        <p className="text-sm">Advance Paid ({lastSubmittedOrder.payment_method}):</p>
+                                        <p className="text-lg font-semibold">
+                                            {POINTS_TO_CURRENCY(lastSubmittedOrder.advance_amount)}
+                                        </p>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-300">
+                                        <p className="text-lg font-bold">Balance Due:</p>
+                                        <p className="text-2xl font-bold">
+                                            {POINTS_TO_CURRENCY(lastSubmittedOrder.finalPrice - lastSubmittedOrder.advance_amount)}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="mt-6 text-center text-xs text-gray-600">

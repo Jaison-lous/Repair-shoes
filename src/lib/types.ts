@@ -37,6 +37,8 @@ export interface Order {
     total_price: number;
     hub_price?: number;
     expense?: number;
+    advance_amount?: number;
+    payment_method?: string | null;
 
     // Status and Dates
     status: OrderStatus;
