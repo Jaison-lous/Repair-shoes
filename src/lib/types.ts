@@ -39,6 +39,8 @@ export interface Order {
     expense?: number;
     advance_amount?: number;
     payment_method?: string | null;
+    balance_paid?: number;
+    balance_payment_method?: string | null;
 
     // Status and Dates
     status: OrderStatus;

@@ -10,15 +10,18 @@ interface OrderDetailModalProps {
     allowPriceEdit?: boolean;
     onPriceUpdate?: (orderId: string, newPrice: number) => void;
     onExpenseUpdate?: (orderId: string, newExpense: number) => void;
+    onBalancePayment?: (orderId: string, amount: number, paymentMethod: string) => void;
 }
 
-export function OrderDetailModal({ order, onClose, userRole = 'store', allowPriceEdit, onPriceUpdate, onExpenseUpdate }: OrderDetailModalProps) {
+export function OrderDetailModal({ order, onClose, userRole = 'store', allowPriceEdit, onPriceUpdate, onExpenseUpdate, onBalancePayment }: OrderDetailModalProps) {
     const [editedStorePrice, setEditedStorePrice] = useState<string>("");
     const [editedHubPrice, setEditedHubPrice] = useState<string>("");
     const [editedExpense, setEditedExpense] = useState<string>("");
     const [isEditingStore, setIsEditingStore] = useState(false);
     const [isEditingHub, setIsEditingHub] = useState(false);
     const [isEditingExpense, setIsEditingExpense] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("");
 
     // Optimistic UI state - use this for display to make updates instant
     const [optimisticOrder, setOptimisticOrder] = useState<Order>(order);
@@ -29,7 +32,21 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
     });
 
     const profit = (optimisticOrder.total_price || 0) - (optimisticOrder.hub_price || 0) - (optimisticOrder.expense || 0);
-    const balanceDue = (optimisticOrder.total_price || 0) - (optimisticOrder.advance_amount || 0);
+    const totalPaid = (optimisticOrder.advance_amount || 0) + (optimisticOrder.balance_paid || 0);
+    const balanceDue = (optimisticOrder.total_price || 0) - totalPaid;
+
+    const handlePayBalance = () => {
+        if (!selectedPaymentMethod) {
+            alert('Please select a payment method');
+            return;
+        }
+        if (onBalancePayment && balanceDue > 0) {
+            onBalancePayment(order.id, balanceDue, selectedPaymentMethod);
+            setOptimisticOrder({ ...optimisticOrder, balance_paid: balanceDue, balance_payment_method: selectedPaymentMethod });
+            setShowPaymentModal(false);
+            setSelectedPaymentMethod("");
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -328,6 +345,37 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                                         ✓ Fully Paid
                                     </div>
                                 )}
+                                {balanceDue > 0 && userRole === 'store' && (
+                                    <button
+                                        onClick={() => setShowPaymentModal(true)}
+                                        className="w-full mt-2 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-all"
+                                    >
+                                        Pay Balance
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Balance Payment Info */}
+                    {optimisticOrder.balance_paid && optimisticOrder.balance_paid > 0 && (
+                        <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-lg">
+                            <p className="text-xs text-green-300 uppercase font-semibold mb-2">Balance Payment</p>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-slate-400">Amount Paid:</span>
+                                    <span className="text-lg font-mono text-white font-bold">
+                                        {POINTS_TO_CURRENCY(optimisticOrder.balance_paid)}
+                                    </span>
+                                </div>
+                                {optimisticOrder.balance_payment_method && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-slate-400">Payment Method:</span>
+                                        <span className="text-sm text-green-300 font-medium">
+                                            {optimisticOrder.balance_payment_method}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -350,6 +398,54 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                     </button>
                 </div>
             </div>
+
+            {/* Payment Method Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]" onClick={() => setShowPaymentModal(false)}>
+                    <div className="bg-slate-800 border border-white/20 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-white mb-4">Select Payment Method</h3>
+                        <p className="text-sm text-slate-400 mb-4">
+                            Balance Amount: <span className="text-orange-400 font-bold font-mono">{POINTS_TO_CURRENCY(balanceDue)}</span>
+                        </p>
+
+                        <div className="space-y-3 mb-6">
+                            {['Google Pay', 'Cash', 'Card'].map((method) => (
+                                <button
+                                    key={method}
+                                    onClick={() => setSelectedPaymentMethod(method)}
+                                    className={cn(
+                                        "w-full p-4 rounded-lg border-2 text-left transition-all",
+                                        selectedPaymentMethod === method
+                                            ? "bg-blue-500/20 border-blue-500 text-blue-300"
+                                            : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                                    )}
+                                >
+                                    <span className="font-medium">{method}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowPaymentModal(false);
+                                    setSelectedPaymentMethod("");
+                                }}
+                                className="flex-1 px-4 py-3 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 font-medium transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handlePayBalance}
+                                disabled={!selectedPaymentMethod}
+                                className="flex-1 px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Confirm Payment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -347,6 +347,25 @@ export default function StorePage() {
         }
     };
 
+    const handleBalancePayment = async (orderId: string, amount: number, paymentMethod: string) => {
+        // Optimistic update - show payment immediately
+        setOrders(prevOrders =>
+            prevOrders.map(order =>
+                order.id === orderId
+                    ? { ...order, balance_paid: amount, balance_payment_method: paymentMethod }
+                    : order
+            )
+        );
+
+        // Sync with database in background
+        try {
+            await MockService.updateBalancePayment(orderId, amount, paymentMethod);
+        } catch (error) {
+            // Revert on error and refresh from server
+            handleRefresh();
+        }
+    };
+
     const handleAddComplaint = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newComplaintDesc || !newComplaintPrice) return;
@@ -553,6 +572,7 @@ export default function StorePage() {
                             allowPriceEdit={true}
                             onPriceUpdate={handlePriceUpdate}
                             onExpenseUpdate={handleExpenseUpdate}
+                            onBalancePayment={handleBalancePayment}
                             onGroupExpense={handleGroupExpense}
                             onCreateGroup={handleCreateGroup}
                             onBulkStageChange={handleBulkStageChange}

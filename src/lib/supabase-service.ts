@@ -32,8 +32,10 @@ export const SupabaseService = {
         )
       `);
 
-        // Filter by store if storeId is provided
-        if (storeId) {
+        // Filter by store if storeId is provided AND is a valid UUID
+        // UUID format: 8-4-4-4-12 hex characters
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (storeId && uuidRegex.test(storeId)) {
             query = query.eq('store_id', storeId);
         }
 
@@ -41,6 +43,10 @@ export const SupabaseService = {
 
         if (error) {
             console.error('Error fetching orders:', error);
+            console.error('Full error details:', JSON.stringify(error, null, 2));
+            console.error('Error message:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Error details:', error.details);
             return [];
         }
 
@@ -53,6 +59,13 @@ export const SupabaseService = {
 
     createOrder: async (order: Omit<Order, 'id' | 'created_at' | 'updated_at'>): Promise<Order | null> => {
         if (!supabase) return null;
+
+        // Validate store_id is a valid UUID
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (order.store_id && !uuidRegex.test(order.store_id)) {
+            console.error('Invalid store_id format:', order.store_id);
+            throw new Error('Invalid store ID. Please log in again.');
+        }
 
         // 1. Insert Order
         const { data: orderData, error: orderError } = await supabase
@@ -67,15 +80,21 @@ export const SupabaseService = {
                 total_price: order.total_price,
                 status: order.status,
                 expected_return_date: order.expected_return_date,
-                store_id: order.store_id
+                store_id: order.store_id,
+                advance_amount: order.advance_amount || 0,
+                payment_method: order.payment_method || null
             })
             .select()
             .single();
 
         if (orderError || !orderData) {
             console.error('Error creating order:', orderError);
+            console.error('Full error details:', JSON.stringify(orderError, null, 2));
             if (orderError && orderError.code === '23505') { // Unique violation
                 throw new Error("Duplicate Serial Number. Please refresh and try again.");
+            }
+            if (orderError && orderError.message) {
+                throw new Error(orderError.message);
             }
             return null;
         }
@@ -236,6 +255,36 @@ export const SupabaseService = {
         }
 
         console.log('Expense updated successfully:', data);
+        return data;
+    },
+
+    updateBalancePayment: async (id: string, balancePaid: number, paymentMethod: string): Promise<Order | null> => {
+        if (!supabase) return null;
+
+        console.log('Updating balance payment:', { id, balancePaid, paymentMethod });
+
+        const { data, error } = await supabase
+            .from('orders')
+            .update({
+                balance_paid: balancePaid,
+                balance_payment_method: paymentMethod,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating balance payment:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            return null;
+        }
+
+        console.log('Balance payment updated successfully:', data);
         return data;
     },
 
