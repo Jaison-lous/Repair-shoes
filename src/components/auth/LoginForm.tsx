@@ -90,7 +90,9 @@ export function LoginForm() {
                         <div className="relative group">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={18} />
                             <input
+                                id="login-password"
                                 name="password"
+                                autoComplete="current-password"
                                 type="password"
                                 required
                                 placeholder="Enter password"

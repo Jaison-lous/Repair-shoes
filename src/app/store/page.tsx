@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { SupabaseService as MockService } from "@/lib/supabase-service";
-import { Order, Complaint, OrderStatus, OrderGroup } from "@/lib/types";
-import { NewOrderForm } from "@/components/store/NewOrderForm";
-import { KanbanBoard } from "@/components/shared/KanbanBoard";
-import { Plus, LayoutTemplate, RefreshCw, LogOut, Settings, Trash2, Layers, MessageCircle, X } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { Plus, LayoutTemplate, RefreshCw, LogOut, Settings, Trash2, Layers, MessageCircle, X, List, Kanban } from "lucide-react";
 import { cn, POINTS_TO_CURRENCY, openWhatsApp } from "@/lib/utils";
 import { logout } from "../login/actions";
 import { useCurrentStore } from "@/hooks/useCurrentStore";
 import { SearchBar } from "@/components/shared/SearchBar";
 import { OrderDetailModal } from "@/components/shared/OrderDetailModal";
+import { OrderListView } from "@/components/shared/OrderListView";
+import { KanbanBoard } from "@/components/shared/KanbanBoard";
+import { InstallAppButton } from "@/components/shared/InstallAppButton";
+import { NewOrderForm } from "@/components/store/NewOrderForm";
+import { MockService } from "@/lib/mock-service";
+import type { Order, OrderStatus, Complaint, InHousePreset } from "@/lib/types";
 
 function ProfitLossView({ orders, onRefresh }: { orders: Order[], onRefresh: () => void }) {
     const [dateFilter, setDateFilter] = useState<'this_month' | 'prev_month' | 'custom'>('this_month');
@@ -216,6 +218,8 @@ function ProfitLossView({ orders, onRefresh }: { orders: Order[], onRefresh: () 
 
 export default function StorePage() {
     const [view, setView] = useState<'new' | 'kanban' | 'profit_loss' | 'config'>('new');
+    const [kanbanViewMode, setKanbanViewMode] = useState<'board' | 'list'>('board');
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [orders, setOrders] = useState<Order[]>([]);
     const [complaints, setComplaints] = useState<Complaint[]>([]);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -227,11 +231,18 @@ export default function StorePage() {
     const [newComplaintPrice, setNewComplaintPrice] = useState("");
     const [isAdding, setIsAdding] = useState(false);
 
+    // In-House Preset Config State
+    const [inHousePresets, setInHousePresets] = useState<InHousePreset[]>([]);
+    const [newInHouseDesc, setNewInHouseDesc] = useState("");
+    const [newInHousePrice, setNewInHousePrice] = useState("");
+    const [isAddingInHouse, setIsAddingInHouse] = useState(false);
+
     useEffect(() => {
         if (storeId) {
             MockService.getOrders(storeId).then(setOrders);
         }
         MockService.getComplaints().then(setComplaints);
+        MockService.getInHousePresets().then(setInHousePresets);
     }, [refreshKey, storeId]);
 
     // Filter orders based on search query
@@ -410,6 +421,24 @@ export default function StorePage() {
         }
     }
 
+    const handleAddInHousePreset = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newInHouseDesc || !newInHousePrice) return;
+        setIsAddingInHouse(true);
+        await MockService.addInHousePreset(newInHouseDesc, Number(newInHousePrice));
+        setNewInHouseDesc("");
+        setNewInHousePrice("");
+        setIsAddingInHouse(false);
+        handleRefresh();
+    };
+
+    const handleDeleteInHousePreset = async (id: string) => {
+         if (confirm("Are you sure you want to delete this in-house preset?")) {
+            await MockService.deleteInHousePreset(id);
+            handleRefresh();
+        }
+    }
+
 
     const handleCompletionToggle = async (orderId: string, isCompleted: boolean) => {
         // Optimistic update - update UI immediately
@@ -457,6 +486,7 @@ export default function StorePage() {
                 </div>
 
                 <div className="flex items-center gap-3" suppressHydrationWarning>
+                    <InstallAppButton />
                     <div className="flex bg-white/5 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-lg" suppressHydrationWarning>
                         <button
                             onClick={() => setView('new')}
@@ -475,7 +505,7 @@ export default function StorePage() {
                                 view === 'kanban' ? "bg-blue-500/20 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.2)]" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                             )}
                         >
-                            <LayoutTemplate size={16} />
+                            {kanbanViewMode === 'list' ? <List size={16} /> : <LayoutTemplate size={16} />}
                             <span>My Orders</span>
                         </button>
                         <button
@@ -530,27 +560,62 @@ export default function StorePage() {
                 )}
 
                 {view === 'kanban' && (
-                    <div className="h-[calc(100vh-250px)] animate-in fade-in zoom-in-95 duration-200">
-                        <div className="mb-4 flex justify-end">
+                    <div className="h-[calc(100vh-250px)] animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+                        <div className="mb-4 flex justify-between items-center">
+                             <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                                <button
+                                    onClick={() => setKanbanViewMode('board')}
+                                    className={cn(
+                                        "p-2 rounded-md transition-all",
+                                        kanbanViewMode === 'board' ? "bg-white/10 text-cyan-300 shadow-sm" : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                    title="Board View"
+                                >
+                                    <Kanban size={16} />
+                                </button>
+                                <button
+                                    onClick={() => setKanbanViewMode('list')}
+                                    className={cn(
+                                        "p-2 rounded-md transition-all",
+                                        kanbanViewMode === 'list' ? "bg-white/10 text-cyan-300 shadow-sm" : "text-slate-400 hover:text-slate-200"
+                                    )}
+                                    title="List View"
+                                >
+                                    <List size={16} />
+                                </button>
+                            </div>
+
                             <button onClick={handleRefresh} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-slate-400 hover:text-cyan-400 transition-colors backdrop-blur-sm border border-white/10">
                                 <RefreshCw size={14} />
                             </button>
                         </div>
-                        <KanbanBoard
-                            orders={filteredOrders}
-                            readOnly={false}
-                            onOrderMove={onOrderMove}
-                            userRole="store"
-                            allowPriceEdit={true}
-                            onPriceUpdate={handlePriceUpdate}
-                            onHubPriceUpdate={handleHubPriceUpdate}
-                            onExpenseUpdate={handleExpenseUpdate}
-                            onBalancePayment={handleBalancePayment}
-                            onGroupExpense={handleGroupExpense}
-                            onCreateGroup={handleCreateGroup}
-                            onBulkStageChange={handleBulkStageChange}
-                            onCompletionToggle={handleCompletionToggle}
-                        />
+                        
+                        {kanbanViewMode === 'board' ? (
+                            <KanbanBoard
+                                orders={filteredOrders}
+                                readOnly={false}
+                                onOrderMove={onOrderMove}
+                                userRole="store"
+                                allowPriceEdit={true}
+                                onPriceUpdate={handlePriceUpdate}
+                                onHubPriceUpdate={handleHubPriceUpdate}
+                                onExpenseUpdate={handleExpenseUpdate}
+                                onBalancePayment={handleBalancePayment}
+                                onGroupExpense={handleGroupExpense}
+                                onCreateGroup={handleCreateGroup}
+                                onBulkStageChange={handleBulkStageChange}
+                                onCompletionToggle={handleCompletionToggle}
+                            />
+                        ) : (
+                            <div className="overflow-y-auto pr-2 pb-20">
+                                <OrderListView 
+                                    orders={filteredOrders}
+                                    onOrderMove={onOrderMove}
+                                    onCardClick={setSelectedOrder}
+                                    readOnly={false}
+                                />
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -560,7 +625,7 @@ export default function StorePage() {
 
                 {view === 'config' && (
                     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {/* Add New */}
+                        {/* Standard Complaints Section */}
                         <div className="glass-panel p-6 rounded-2xl">
                             <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center">
                                 <Plus className="mr-2 text-cyan-400" size={20} />
@@ -590,8 +655,7 @@ export default function StorePage() {
                             </form>
                         </div>
 
-                        {/* List */}
-                        <div className="glass-panel rounded-2xl overflow-hidden">
+                        <div className="glass-panel rounded-2xl overflow-hidden mb-8">
                             <div className="p-6 border-b border-white/5">
                                 <h2 className="text-lg font-bold text-slate-100">Existing Presets</h2>
                                 <p className="text-sm text-slate-400">Manage standard repair types and base prices.</p>
@@ -619,9 +683,79 @@ export default function StorePage() {
                                 )}
                             </div>
                         </div>
+
+                        {/* In-House Repair Presets Section */}
+                        <div className="glass-panel p-6 rounded-2xl border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.05)]">
+                             <div className="mb-6 pb-4 border-b border-white/5">
+                                <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400 neon-text">
+                                    In-House Repair Presets
+                                </h2>
+                                <p className="text-sm text-slate-400">Configure services handled directly in-store (not sent to Hub).</p>
+                             </div>
+
+                             <div className="mb-6">
+                                <form onSubmit={handleAddInHousePreset} className="flex gap-4">
+                                    <input
+                                        type="text"
+                                        placeholder="In-House Service Description"
+                                        className="flex-1 p-3 rounded-xl border border-white/10 bg-black/20 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+                                        value={newInHouseDesc}
+                                        onChange={e => setNewInHouseDesc(e.target.value)}
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Price"
+                                        className="w-32 p-3 rounded-xl border border-white/10 bg-black/20 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+                                        value={newInHousePrice}
+                                        onChange={e => setNewInHousePrice(e.target.value)}
+                                    />
+                                    <button
+                                        disabled={isAddingInHouse}
+                                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                                    >
+                                        Add
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div className="rounded-xl overflow-hidden bg-black/20 border border-white/5">
+                                <div className="divide-y divide-white/5">
+                                    {inHousePresets.map(c => (
+                                        <div key={c.id} className="p-4 flex justify-between items-center hover:bg-white/5 transition-colors group">
+                                            <div>
+                                                <p className="font-medium text-slate-200">{c.description}</p>
+                                                <p className="text-sm text-slate-500 font-mono text-purple-400">{POINTS_TO_CURRENCY(c.default_price)}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteInHousePreset(c.id)}
+                                                className="p-2 text-slate-500 group-hover:text-red-400 group-hover:bg-red-500/10 rounded-lg transition-all"
+                                                title="Delete Preset"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {inHousePresets.length === 0 && (
+                                        <div className="p-8 text-center text-slate-500 italic">
+                                            No in-house presets found. Define them above.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
+
+            {/* Order Details Modal for List View */}
+            {selectedOrder && (
+                <OrderDetailModal
+                    order={selectedOrder}
+                    onClose={() => setSelectedOrder(null)}
+                    userRole="store"
+                    allowPriceEdit={true}
+                />
+            )}
         </div>
     );
 }

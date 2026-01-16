@@ -1,6 +1,6 @@
 import { Order } from "@/lib/types";
 import { cn, POINTS_TO_CURRENCY, openWhatsApp } from "@/lib/utils";
-import { X, User, Phone, Calendar, Tag, MessageCircle, Hash, DollarSign } from "lucide-react";
+import { X, User, Phone, Calendar, Tag, MessageCircle, Hash, DollarSign, Printer } from "lucide-react";
 import { useState } from "react";
 
 interface OrderDetailModalProps {
@@ -404,6 +404,13 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                         WhatsApp Customer
                     </button>
                     <button
+                        onClick={() => window.print()}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Printer size={16} />
+                        Receipt
+                    </button>
+                    <button
                         onClick={onClose}
                         className="px-6 bg-white/5 hover:bg-white/10 text-slate-300 py-3 rounded-lg text-sm font-medium transition-colors"
                     >
@@ -459,6 +466,131 @@ export function OrderDetailModal({ order, onClose, userRole = 'store', allowPric
                     </div>
                 </div>
             )}
+
+
+            {/* Hidden Print Receipt */}
+            <div className="hidden print:block">
+                <style dangerouslySetInnerHTML={{
+                    __html: `
+                        @media print {
+                            @page { margin: 0.5cm; size: auto; }
+                            body { 
+                                visibility: hidden; 
+                                background: white !important;
+                                color: black !important;
+                            }
+                            /* Hide everything in the body by default */
+                            
+                            .print-receipt-modal { 
+                                visibility: visible; 
+                                position: fixed; 
+                                left: 0; 
+                                top: 0; 
+                                width: 100%; 
+                                color: black !important;
+                                background: white;
+                                z-index: 9999;
+                                font-family: sans-serif;
+                            }
+                            .print-receipt-modal * { 
+                                visibility: visible; 
+                                color: black !important; 
+                            }
+                            
+                            /* Hide other common containers to prevent layout ghosts */
+                            .glass-panel, form, .neon-text, nav, header, footer {
+                                display: none !important;
+                            }
+                        }
+                    ` 
+                }} />
+                <div className="print-receipt-modal max-w-[21cm] mx-auto p-4 text-black bg-white">
+                    <div className="text-center mb-6">
+                        <h1 className="text-2xl font-bold uppercase tracking-wider">Shoe Repair Order</h1>
+                        <p className="text-sm text-gray-600 mt-1">{new Date(order.created_at).toLocaleDateString()}</p>
+                        <p className="text-xs text-gray-400 mt-1">Receipt #{order.serial_number || order.id.slice(0, 8)}</p>
+                    </div>
+
+                    <div className="border-t-2 border-b-2 border-black py-4 mb-4">
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                                <p className="font-semibold">Customer:</p>
+                                <p>{order.customer_name}</p>
+                            </div>
+                            <div>
+                                <p className="font-semibold">WhatsApp:</p>
+                                <p>{order.whatsapp_number}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mb-4">
+                        <p className="font-semibold text-sm">Shoe Model:</p>
+                        <p className="text-lg">{order.shoe_model}</p>
+                    </div>
+
+                    <div className="mb-4">
+                        <p className="font-semibold text-sm">Serial Number:</p>
+                        <p className="text-lg font-mono">{order.serial_number}</p>
+                    </div>
+
+                    {(order.complaints && order.complaints.length > 0) && (
+                        <div className="mb-4">
+                            <p className="font-semibold text-sm mb-2">Services:</p>
+                            <ul className="list-disc list-inside">
+                                {order.complaints.map((c: any, idx: number) => (
+                                    <li key={idx} className="text-sm">{c.description}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {order.custom_complaint && (
+                        <div className="mb-4">
+                            <p className="font-semibold text-sm">Custom Service:</p>
+                            <p className="text-sm">{order.custom_complaint}</p>
+                        </div>
+                    )}
+
+                    <div className="mb-4">
+                        <p className="font-semibold text-sm">Expected Return:</p>
+                        <p>{new Date(order.expected_return_date).toLocaleDateString()}</p>
+                    </div>
+
+                    <div className="border-t-2 border-black pt-4 mt-4">
+                        <div className="flex justify-between items-center">
+                            <p className="text-lg font-bold">Total Price:</p>
+                            <p className="text-2xl font-bold">
+                                {order.is_price_unknown ? 'TBD' : POINTS_TO_CURRENCY(order.total_price)}
+                            </p>
+                        </div>
+                        
+                        {(totalPaid > 0) && (
+                            <>
+                                <div className="flex justify-between items-center mt-2 text-gray-600">
+                                    <p className="text-sm">Paid Amount:</p>
+                                    <p className="text-lg font-semibold">
+                                        {POINTS_TO_CURRENCY(totalPaid)}
+                                    </p>
+                                </div>
+                                <div className="flex justify-between items-center mt-2 pt-2 border-t border-dashed border-gray-300">
+                                    <p className="text-lg font-bold">Balance Due:</p>
+                                    <p className="text-2xl font-bold">
+                                        {POINTS_TO_CURRENCY(Math.max(0, balanceDue))}
+                                    </p>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="mt-8 text-center text-xs text-gray-600">
+                        <p className="font-bold mb-1">Terms & Conditions:</p>
+                        <p>Goods once sold/repaired will not be taken back.</p>
+                        <p>We are not responsible for natural wear and tear.</p>
+                        <p className="mt-4 font-bold text-sm">Thank you for your business!</p>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

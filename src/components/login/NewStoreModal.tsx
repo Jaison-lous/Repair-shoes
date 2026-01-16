@@ -123,10 +123,13 @@ export function NewStoreModal({ isOpen, onClose, onSuccess }: NewStoreModalProps
                         </p>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-300">Admin Password</label>
+                            <label htmlFor="admin-verify-password" className="text-sm font-medium text-slate-300">Admin Password</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                 <input
+                                    id="admin-verify-password"
+                                    name="admin_password"
+                                    autoComplete="current-password"
                                     type="password"
                                     value={adminPassword}
                                     onChange={(e) => {
@@ -166,8 +169,11 @@ export function NewStoreModal({ isOpen, onClose, onSuccess }: NewStoreModalProps
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-300">Store Name *</label>
+                            <label htmlFor="new-store-name" className="text-sm font-medium text-slate-300">Store Name *</label>
                             <input
+                                id="new-store-name"
+                                name="store_name"
+                                autoComplete="off"
                                 type="text"
                                 value={storeName}
                                 onChange={(e) => {
@@ -181,8 +187,11 @@ export function NewStoreModal({ isOpen, onClose, onSuccess }: NewStoreModalProps
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-300">Store Password *</label>
+                            <label htmlFor="new-store-password" className="text-sm font-medium text-slate-300">Store Password *</label>
                             <input
+                                id="new-store-password"
+                                name="new_password"
+                                autoComplete="new-password"
                                 type="password"
                                 value={storePassword}
                                 onChange={(e) => {
@@ -195,8 +204,11 @@ export function NewStoreModal({ isOpen, onClose, onSuccess }: NewStoreModalProps
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-300">Confirm Password *</label>
+                            <label htmlFor="confirm-store-password" className="text-sm font-medium text-slate-300">Confirm Password *</label>
                             <input
+                                id="confirm-store-password"
+                                name="confirm_password"
+                                autoComplete="new-password"
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => {

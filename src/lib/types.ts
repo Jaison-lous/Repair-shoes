@@ -14,6 +14,12 @@ export interface Complaint {
     default_price: number;
 }
 
+export interface InHousePreset {
+    id: string;
+    description: string;
+    default_price: number;
+}
+
 export interface OrderComplaint {
     order_id: string;
     complaint_id: string;

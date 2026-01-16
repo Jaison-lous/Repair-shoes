@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SupabaseService as MockService } from "@/lib/supabase-service";
-import { Complaint } from "@/lib/types";
+import { Complaint, InHousePreset } from "@/lib/types";
 import { cn, POINTS_TO_CURRENCY, openWhatsApp } from "@/lib/utils";
 import { Check, Loader2, CheckCircle2, AlertCircle, X, Printer } from "lucide-react";
 import { addWeeks, format } from "date-fns";
@@ -35,6 +35,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 
 export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; storeId: string | null }) {
     const [complaints, setComplaints] = useState<Complaint[]>([]);
+    const [inHousePresets, setInHousePresets] = useState<InHousePreset[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -58,6 +59,7 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
     const [serialNumber, setSerialNumber] = useState("");
     const [orderDate, setOrderDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [selectedComplaints, setSelectedComplaints] = useState<string[]>([]);
+    const [selectedInHousePresets, setSelectedInHousePresets] = useState<string[]>([]);
     const [customComplaint, setCustomComplaint] = useState("");
     const [customPrice, setCustomPrice] = useState("");
     const [priceUnknown, setPriceUnknown] = useState(false);
@@ -75,6 +77,9 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
     useEffect(() => {
         MockService.getComplaints().then((data) => {
             setComplaints(data);
+        });
+        MockService.getInHousePresets().then((data) => {
+            setInHousePresets(data);
             setLoading(false);
         });
 
@@ -90,17 +95,24 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
         return acc + (c ? c.default_price : 0);
     }, 0);
 
+    const totalInHousePrice = selectedInHousePresets.reduce((acc, id) => {
+        const p = inHousePresets.find((x) => x.id === id);
+        return acc + (p ? p.default_price : 0);
+    }, 0);
+
     const finalPrice = isFree
         ? 0
         : (priceUnknown
             ? 0
-            : totalPresetPrice + (customPrice ? parseFloat(customPrice) : 0));
+            : ((isInHouse ? totalInHousePrice : 0) + totalPresetPrice) + (customPrice ? parseFloat(customPrice) : 0));
 
     const resetForm = () => {
         setClientName("");
         setWhatsapp("");
         setShoeModel("");
+        setShoeModel("");
         setSelectedComplaints([]);
+        setSelectedInHousePresets([]);
         setCustomComplaint("");
         setCustomPrice("");
         setPriceUnknown(false);
@@ -124,14 +136,27 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
         setShowSuccess(true);
 
         // Store form data for potential retry
+        // Prepare custom complaint string with In-House info if applicable
+        let finalCustomComplaint = customComplaint;
+        if (isInHouse && selectedInHousePresets.length > 0) {
+             const presetNames = inHousePresets
+                .filter(p => selectedInHousePresets.includes(p.id))
+                .map(p => p.description)
+                .join(", ");
+             finalCustomComplaint = customComplaint 
+                ? `${customComplaint} (In-House: ${presetNames})`
+                : `In-House Services: ${presetNames}`;
+        }
+
         const orderData = {
             customer_name: clientName,
             whatsapp_number: whatsapp,
             shoe_model: shoeModel,
             serial_number: serialNumber,
             status: "submitted" as const,
-            complaints: complaints.filter(c => selectedComplaints.includes(c.id)),
-            custom_complaint: customComplaint,
+            // Allow standard complaints even for in-house
+            complaints: complaints.filter(c => selectedComplaints.includes(c.id)), 
+            custom_complaint: finalCustomComplaint,
             is_price_unknown: priceUnknown,
             total_price: finalPrice,
             expected_return_date: returnDate,
@@ -197,6 +222,12 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
 
     const toggleComplaint = (id: string) => {
         setSelectedComplaints((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+        );
+    };
+
+    const toggleInHousePreset = (id: string) => {
+        setSelectedInHousePresets((prev) =>
             prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
         );
     };
@@ -356,8 +387,10 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                         </div>
                     </div>
 
-                    <div className="space-y-3">
-                        <label className="text-sm font-medium text-slate-300">Select Complaints</label>
+                    <div className="space-y-3 transition-all duration-300">
+                        <div className="flex justify-between items-center">
+                             <label className="text-sm font-medium text-slate-300">Select Complaints (Hub)</label>
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                             {complaints.map((c) => (
                                 <button
@@ -468,7 +501,7 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
 
                     {/* In-House Repair Checkbox */}
                     <div className="p-4 bg-purple-500/5 rounded-xl border border-purple-500/10">
-                        <label className="flex items-center space-x-3 cursor-pointer">
+                        <label className="flex items-center space-x-3 cursor-pointer mb-3">
                             <input
                                 type="checkbox"
                                 checked={isInHouse}
@@ -481,6 +514,37 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                                 <span className="block text-xs text-purple-500/60">Don't send to Central Hub. Handle repair in-store.</span>
                             </div>
                         </label>
+
+                         {isInHouse && (
+                            <div className="pl-8 animate-in fade-in slide-in-from-top-2">
+                                <p className="text-sm font-medium text-slate-300 mb-2">Select In-House Services:</p>
+                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                    {inHousePresets.map((p) => (
+                                        <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => toggleInHousePreset(p.id)}
+                                            disabled={submitting}
+                                            className={cn(
+                                                "flex items-center justify-between p-3 rounded-xl border text-left transition-all",
+                                                selectedInHousePresets.includes(p.id)
+                                                    ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.15)]"
+                                                    : "bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200",
+                                                submitting && "opacity-50 cursor-not-allowed"
+                                            )}
+                                        >
+                                            <span className="text-sm font-medium">{p.description}</span>
+                                            <span className="text-xs bg-white/10 px-2 py-1 rounded text-slate-300 border border-white/5 mx-2">
+                                                {POINTS_TO_CURRENCY(p.default_price)}
+                                            </span>
+                                        </button>
+                                    ))}
+                                    {inHousePresets.length === 0 && (
+                                        <p className="col-span-2 text-sm text-slate-500 italic">No in-house presets configured.</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Free Service Checkbox */}
@@ -601,12 +665,36 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                     <style dangerouslySetInnerHTML={{
                         __html: `
                         @media print {
-                            body * { visibility: hidden; }
-                            .print-receipt, .print-receipt * { visibility: visible; }
-                            .print-receipt { position: absolute; left: 0; top: 0; width: 100%; }
+                            @page { margin: 2cm; size: auto; }
+                            body { 
+                                visibility: hidden; 
+                                background: white !important;
+                                color: black !important; /* Force black color global */
+                            }
+                            /* Hide everything in the body by default */
+                            
+                            .print-receipt { 
+                                visibility: visible; 
+                                position: fixed; /* Fixed puts it relative to the viewport/page */
+                                left: 0; 
+                                top: 0; 
+                                width: 100%; 
+                                color: black !important;
+                                background: white;
+                                z-index: 9999;
+                            }
+                            .print-receipt * { 
+                                visibility: visible; 
+                                color: black !important; /* Force black color children */
+                            }
+                            
+                            /* Hide other common containers to prevent layout ghosts */
+                            .glass-panel, form, .neon-text {
+                                display: none !important;
+                            }
                         }
                     ` }} />
-                    <div className="print-receipt max-w-md mx-auto">
+                    <div className="print-receipt max-w-[21cm] mx-auto p-4 text-black">
                         <div className="text-center mb-6">
                             <h1 className="text-2xl font-bold">Shoe Repair Order</h1>
                             <p className="text-sm text-gray-600 mt-1">{new Date(lastSubmittedOrder.orderDate).toLocaleDateString()}</p>

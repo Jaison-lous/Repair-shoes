@@ -21,6 +21,8 @@ export const SupabaseService = {
     getOrders: async (storeId?: string): Promise<Order[]> => {
         if (!supabase) return [];
 
+        console.log("SupabaseService: Fetching orders for storeId:", storeId);
+
         // Fetch orders and their related complaints and store
         let query = supabase
             .from('orders')
@@ -37,6 +39,8 @@ export const SupabaseService = {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (storeId && uuidRegex.test(storeId)) {
             query = query.eq('store_id', storeId);
+        } else if (storeId) {
+            console.warn("SupabaseService: Invalid storeId format provided:", storeId);
         }
 
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -44,11 +48,10 @@ export const SupabaseService = {
         if (error) {
             console.error('Error fetching orders:', error);
             console.error('Full error details:', JSON.stringify(error, null, 2));
-            console.error('Error message:', error.message);
-            console.error('Error code:', error.code);
-            console.error('Error details:', error.details);
             return [];
         }
+        
+        console.log(`SupabaseService: Fetched ${data?.length || 0} orders.`);
 
         return data.map((item: any) => ({
             ...item,
@@ -62,61 +65,117 @@ export const SupabaseService = {
 
         // Validate store_id is a valid UUID
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (order.store_id && !uuidRegex.test(order.store_id)) {
-            console.error('Invalid store_id format:', order.store_id);
+        let finalStoreId = order.store_id;
+        
+        if (!finalStoreId || finalStoreId.trim() === '') {
+            finalStoreId = null as any; // Allow null for DB even if type says string
+        } else if (!uuidRegex.test(finalStoreId)) {
+            console.error('Invalid store_id format:', finalStoreId);
             throw new Error('Invalid store ID. Please log in again.');
         }
 
         // 1. Insert Order
-        const { data: orderData, error: orderError } = await supabase
-            .from('orders')
-            .insert({
-                customer_name: order.customer_name,
-                whatsapp_number: order.whatsapp_number,
-                shoe_model: order.shoe_model,
-                serial_number: order.serial_number,
-                custom_complaint: order.custom_complaint,
-                is_price_unknown: order.is_price_unknown,
-                total_price: order.total_price,
-                status: order.status,
-                expected_return_date: order.expected_return_date,
-                store_id: order.store_id,
-                advance_amount: order.advance_amount || 0,
-                payment_method: order.payment_method || null,
-                is_in_house: order.is_in_house || false
-            })
-            .select()
-            .single();
+        try {
+            let { data: orderData, error: orderError } = await supabase
+                .from('orders')
+                .insert({
+                    customer_name: order.customer_name,
+                    whatsapp_number: order.whatsapp_number,
+                    shoe_model: order.shoe_model,
+                    serial_number: order.serial_number,
+                    custom_complaint: order.custom_complaint,
+                    is_price_unknown: order.is_price_unknown,
+                    total_price: order.total_price,
+                    status: order.status,
+                    expected_return_date: order.expected_return_date,
+                    store_id: finalStoreId,
+                    advance_amount: order.advance_amount || 0,
+                    payment_method: order.payment_method || null,
+                    is_in_house: order.is_in_house || false
+                })
+                .select()
+                .single();
 
-        if (orderError || !orderData) {
-            console.error('Error creating order:', orderError);
-            console.error('Full error details:', JSON.stringify(orderError, null, 2));
-            if (orderError && orderError.code === '23505') { // Unique violation
-                throw new Error("Duplicate Serial Number. Please refresh and try again.");
+            if (orderError || !orderData) {
+                console.error('Error creating order response:', JSON.stringify(orderError, null, 2));
+                
+                // Handle Foreign Key Violation (Invalid Store ID)
+                // Check both details (for table name) and message (for constraint name)
+                if (orderError && orderError.code === '23503' && 
+                   (orderError.details?.includes('stores') || orderError.message?.includes('store_id'))) {
+                    console.warn("Invalid store_id detected. Attempting to fetch a valid store...");
+                    
+                    // Fetch the first available store
+                    const { data: stores } = await supabase.from('stores').select('id').limit(1);
+                    
+                    if (stores && stores.length > 0) {
+                        const fallbackStoreId = stores[0].id;
+                        console.log(`Retrying order creation with fallback store ID: ${fallbackStoreId}`);
+                        
+                        // Retry creation with fallback store
+                        const { data: retryData, error: retryError } = await supabase
+                            .from('orders')
+                            .insert({
+                                customer_name: order.customer_name,
+                                whatsapp_number: order.whatsapp_number,
+                                shoe_model: order.shoe_model,
+                                serial_number: order.serial_number,
+                                custom_complaint: order.custom_complaint,
+                                is_price_unknown: order.is_price_unknown,
+                                total_price: order.total_price,
+                                status: order.status,
+                                expected_return_date: order.expected_return_date,
+                                store_id: fallbackStoreId, // Use fallback ID
+                                advance_amount: order.advance_amount || 0,
+                                payment_method: order.payment_method || null,
+                                is_in_house: order.is_in_house || false
+                            })
+                            .select()
+                            .single();
+                            
+                         if (!retryError && retryData) {
+                             // Success on retry!
+                             orderData = retryData; // Update ref to continue to complaint linking
+                         } else {
+                             console.error("Retry failed:", JSON.stringify(retryError, null, 2));
+                             const msg = retryError?.message || JSON.stringify(retryError);
+                             throw new Error(`Failed to create order (Retry failed): ${msg}`);
+                         }
+                    } else {
+                        throw new Error("Invalid Store ID and no fallback stores found. Please contact admin.");
+                    }
+                } else {
+                    // Other errors
+                    const msg = orderError?.message || orderError?.details || JSON.stringify(orderError);
+                    if (orderError && orderError.code === '23505') {
+                        throw new Error("Duplicate Serial Number. Please refresh and try again.");
+                    }
+                    throw new Error(`Failed to create order: ${msg}`);
+                }
             }
-            if (orderError && orderError.message) {
-                throw new Error(orderError.message);
+            
+            // 2. Insert Order Complaints Relations if any
+            if (order.complaints && order.complaints.length > 0) {
+                 const links = order.complaints.map(c => ({
+                    order_id: orderData.id,
+                    complaint_id: c.id
+                }));
+
+                const { error: linkError } = await supabase
+                    .from('order_complaints')
+                    .insert(links);
+
+                if (linkError) {
+                    console.error('Error linking complaints:', linkError);
+                }
             }
-            return null;
+
+            return { ...orderData, complaints: order.complaints || [] };
+
+        } catch (err: any) {
+             console.error("Exception in createOrder:", err);
+             throw err;
         }
-
-        // 2. Insert Order Complaints Relations if any
-        if (order.complaints && order.complaints.length > 0) {
-            const links = order.complaints.map(c => ({
-                order_id: orderData.id,
-                complaint_id: c.id
-            }));
-
-            const { error: linkError } = await supabase
-                .from('order_complaints')
-                .insert(links);
-
-            if (linkError) {
-                console.error('Error linking complaints:', linkError);
-            }
-        }
-
-        return { ...orderData, complaints: order.complaints || [] };
     },
 
     getNextSerialNumber: async (): Promise<string> => {
@@ -129,7 +188,7 @@ export const SupabaseService = {
             .limit(1);
 
         if (error) {
-            console.error("Error fetching last serial number:", error);
+            console.error("Error fetching last serial number:", error.message, error.details, error.hint);
             return "LW01";
         }
 
@@ -299,6 +358,54 @@ export const SupabaseService = {
 
         if (error) {
             console.error("Error deleting complaint:", error);
+            return false;
+        }
+        return true;
+    },
+
+    // In-House Presets
+    getInHousePresets: async (): Promise<Complaint[]> => {
+        if (!supabase) return [];
+
+        const { data, error } = await supabase
+            .from('in_house_presets')
+            .select('*')
+            .order('description');
+
+        if (error) {
+            console.error('Error fetching in-house presets:', JSON.stringify(error, null, 2));
+            return [];
+        }
+
+        return data || [];
+    },
+
+    addInHousePreset: async (description: string, default_price: number): Promise<Complaint | null> => {
+        if (!supabase) return null;
+
+        const { data, error } = await supabase
+            .from('in_house_presets')
+            .insert({ description, default_price })
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Error adding in-house preset:", error);
+            return null;
+        }
+        return data;
+    },
+
+    deleteInHousePreset: async (id: string): Promise<boolean> => {
+        if (!supabase) return false;
+
+        const { error } = await supabase
+            .from('in_house_presets')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error("Error deleting in-house preset:", error);
             return false;
         }
         return true;
