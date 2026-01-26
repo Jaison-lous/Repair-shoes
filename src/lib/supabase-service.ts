@@ -50,7 +50,7 @@ export const SupabaseService = {
             console.error('Full error details:', JSON.stringify(error, null, 2));
             return [];
         }
-        
+
         console.log(`SupabaseService: Fetched ${data?.length || 0} orders.`);
 
         return data.map((item: any) => ({
@@ -66,7 +66,7 @@ export const SupabaseService = {
         // Validate store_id is a valid UUID
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         let finalStoreId = order.store_id;
-        
+
         if (!finalStoreId || finalStoreId.trim() === '') {
             finalStoreId = null as any; // Allow null for DB even if type says string
         } else if (!uuidRegex.test(finalStoreId)) {
@@ -83,6 +83,8 @@ export const SupabaseService = {
                     whatsapp_number: order.whatsapp_number,
                     shoe_model: order.shoe_model,
                     serial_number: order.serial_number,
+                    shoe_size: order.shoe_size,
+                    shoe_color: order.shoe_color,
                     custom_complaint: order.custom_complaint,
                     is_price_unknown: order.is_price_unknown,
                     total_price: order.total_price,
@@ -98,20 +100,20 @@ export const SupabaseService = {
 
             if (orderError || !orderData) {
                 console.error('Error creating order response:', JSON.stringify(orderError, null, 2));
-                
+
                 // Handle Foreign Key Violation (Invalid Store ID)
                 // Check both details (for table name) and message (for constraint name)
-                if (orderError && orderError.code === '23503' && 
-                   (orderError.details?.includes('stores') || orderError.message?.includes('store_id'))) {
+                if (orderError && orderError.code === '23503' &&
+                    (orderError.details?.includes('stores') || orderError.message?.includes('store_id'))) {
                     console.warn("Invalid store_id detected. Attempting to fetch a valid store...");
-                    
+
                     // Fetch the first available store
                     const { data: stores } = await supabase.from('stores').select('id').limit(1);
-                    
+
                     if (stores && stores.length > 0) {
                         const fallbackStoreId = stores[0].id;
                         console.log(`Retrying order creation with fallback store ID: ${fallbackStoreId}`);
-                        
+
                         // Retry creation with fallback store
                         const { data: retryData, error: retryError } = await supabase
                             .from('orders')
@@ -120,6 +122,8 @@ export const SupabaseService = {
                                 whatsapp_number: order.whatsapp_number,
                                 shoe_model: order.shoe_model,
                                 serial_number: order.serial_number,
+                                shoe_size: order.shoe_size,
+                                shoe_color: order.shoe_color,
                                 custom_complaint: order.custom_complaint,
                                 is_price_unknown: order.is_price_unknown,
                                 total_price: order.total_price,
@@ -132,15 +136,15 @@ export const SupabaseService = {
                             })
                             .select()
                             .single();
-                            
-                         if (!retryError && retryData) {
-                             // Success on retry!
-                             orderData = retryData; // Update ref to continue to complaint linking
-                         } else {
-                             console.error("Retry failed:", JSON.stringify(retryError, null, 2));
-                             const msg = retryError?.message || JSON.stringify(retryError);
-                             throw new Error(`Failed to create order (Retry failed): ${msg}`);
-                         }
+
+                        if (!retryError && retryData) {
+                            // Success on retry!
+                            orderData = retryData; // Update ref to continue to complaint linking
+                        } else {
+                            console.error("Retry failed:", JSON.stringify(retryError, null, 2));
+                            const msg = retryError?.message || JSON.stringify(retryError);
+                            throw new Error(`Failed to create order (Retry failed): ${msg}`);
+                        }
                     } else {
                         throw new Error("Invalid Store ID and no fallback stores found. Please contact admin.");
                     }
@@ -153,10 +157,10 @@ export const SupabaseService = {
                     throw new Error(`Failed to create order: ${msg}`);
                 }
             }
-            
+
             // 2. Insert Order Complaints Relations if any
             if (order.complaints && order.complaints.length > 0) {
-                 const links = order.complaints.map(c => ({
+                const links = order.complaints.map(c => ({
                     order_id: orderData.id,
                     complaint_id: c.id
                 }));
@@ -173,8 +177,8 @@ export const SupabaseService = {
             return { ...orderData, complaints: order.complaints || [] };
 
         } catch (err: any) {
-             console.error("Exception in createOrder:", err);
-             throw err;
+            console.error("Exception in createOrder:", err);
+            throw err;
         }
     },
 

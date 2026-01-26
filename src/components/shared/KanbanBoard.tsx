@@ -344,6 +344,7 @@ export function KanbanBoard({ orders, onOrderMove, readOnly = false, onCardClick
                                     onSelect={() => toggleSelection(order.id)}
                                     onCompletionToggle={onCompletionToggle}
                                     showStoreBadge={showStoreBadge}
+                                    onOrderMove={onOrderMove}
                                 />
                             ))}
                         </div>
@@ -411,6 +412,7 @@ export function KanbanBoard({ orders, onOrderMove, readOnly = false, onCardClick
                                             onSelect={() => toggleSelection(order.id)}
                                             onCompletionToggle={onCompletionToggle}
                                             showStoreBadge={showStoreBadge}
+                                            onOrderMove={onOrderMove}
                                         />
                                     </div>
                                 ))}

@@ -22,8 +22,9 @@ const STATUS_OPTIONS: { id: OrderStatus; label: string; color: string }[] = [
 ];
 
 export function OrderListView({ orders, onOrderMove, onCardClick, readOnly }: OrderListViewProps) {
-    // Filter out completed orders (consistent with KanbanBoard default view, unless we want to show them)
-    // The user asked for a list view to manage statuses, usually active ones.
+    // Determine price to display based on role (default to store for now as it's used in StorePage)
+    // Actually, OrderListView is currently only used in StorePage.
+
     const activeOrders = orders.filter(o => !o.is_completed);
 
     if (activeOrders.length === 0) {
@@ -34,72 +35,57 @@ export function OrderListView({ orders, onOrderMove, onCardClick, readOnly }: Or
             </div>
         );
     }
-
     return (
         <div className="space-y-3 pb-20">
             {activeOrders.map((order) => (
-                <div 
-                    key={order.id} 
-                    className="bg-white/5 border border-white/10 rounded-xl p-4 active:scale-[0.99] transition-all"
+                <div
+                    key={order.id}
+                    className="bg-white/5 border border-white/10 rounded-xl p-4 active:scale-[0.99] transition-all hover:border-cyan-500/30 group relative"
                 >
-                    {/* Header: ID and Date */}
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="font-mono text-xs text-slate-500">#{order.serial_number || '---'}</span>
-                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                            <Clock size={10} />
-                            {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
-                        </span>
-                    </div>
-
-                    {/* Main Content: Clickable */}
-                    <div 
-                        onClick={() => onCardClick?.(order)}
-                        className="cursor-pointer mb-4"
-                    >
-                        <h3 className="font-bold text-slate-200 text-lg mb-1">{order.shoe_model}</h3>
-                        <div className="flex items-center gap-3 text-sm text-slate-400 mb-1">
-                            <div className="flex items-center gap-1">
-                                <User size={12} />
-                                <span>{order.customer_name}</span>
+                    {/* Header: SN (Large/White), Date and Status Select */}
+                    <div className="flex justify-between items-start mb-3">
+                        <div onClick={() => onCardClick?.(order)} className="cursor-pointer">
+                            <span className="font-mono text-xl font-bold text-white/90">#{order.serial_number || '---'}</span>
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <Clock size={10} />
+                                {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
                             </div>
                         </div>
-                        <div className="text-cyan-400 font-mono font-bold">
-                            {POINTS_TO_CURRENCY(order.total_price)}
-                        </div>
+
+                        {/* Status Select for List View Only */}
+                        {!readOnly && onOrderMove && (
+                            <div className="relative group/select min-w-[110px]">
+                                <select
+                                    value={order.status}
+                                    onChange={(e) => onOrderMove(order.id, e.target.value as OrderStatus)}
+                                    className={cn(
+                                        "w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider focus:outline-none focus:border-cyan-500/50 appearance-none transition-colors",
+                                        STATUS_OPTIONS.find(s => s.id === order.status)?.color?.replace('/20', '/40') || "text-slate-300"
+                                    )}
+                                >
+                                    {STATUS_OPTIONS.map((status) => (
+                                        <option key={status.id} value={status.id} className="bg-slate-900 text-slate-300">
+                                            {status.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Actions: Status Dropdown */}
-                    <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-3">
-                        <label className="text-xs text-slate-500 font-medium">Status:</label>
-                        {!readOnly && onOrderMove ? (
-                            <select
-                                value={order.status}
-                                onChange={(e) => onOrderMove(order.id, e.target.value as OrderStatus)}
-                                className={cn(
-                                    "flex-1 bg-black/40 border border-white/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500/50 appearance-none",
-                                    // Dynamic color for text based on status
-                                    STATUS_OPTIONS.find(s => s.id === order.status)?.color || "text-slate-300"
-                                )}
-                            >
-                                {STATUS_OPTIONS.map((status) => (
-                                    <option key={status.id} value={status.id} className="bg-slate-900 text-slate-300">
-                                        {status.label}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <span 
-                                className={cn(
-                                    "px-3 py-1 text-xs rounded-full border",
-                                    STATUS_OPTIONS.find(s => s.id === order.status)?.color
-                                )}
-                            >
-                                {STATUS_OPTIONS.find(s => s.id === order.status)?.label || order.status}
-                            </span>
-                        )}
+                    {/* Customer Name (Small/Cyan) */}
+                    <div
+                        onClick={() => onCardClick?.(order)}
+                        className="flex items-center gap-2 text-sm text-cyan-400/90 font-medium cursor-pointer"
+                    >
+                        <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center text-[10px] text-cyan-500 border border-cyan-500/20">
+                            {order.customer_name?.charAt(0) || 'U'}
+                        </div>
+                        <span>{order.customer_name}</span>
                     </div>
                 </div>
             ))}
         </div>
     );
 }
+

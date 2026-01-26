@@ -25,6 +25,8 @@ create table if not exists orders (
   whatsapp_number text not null,
   shoe_model text not null,
   serial_number text unique,
+  shoe_size text,
+  shoe_color text,
   custom_complaint text,
   is_price_unknown boolean default false,
   total_price numeric(10, 2) default 0,
@@ -212,3 +214,31 @@ BEGIN
         COMMENT ON COLUMN orders.payment_method IS 'Payment method used for advance: Google Pay, Cash, Card';
     END IF;
 END $$;
+
+-- 9. Add Shoe Size and Color
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'shoe_size') THEN
+        ALTER TABLE orders ADD COLUMN shoe_size TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'shoe_color') THEN
+        ALTER TABLE orders ADD COLUMN shoe_color TEXT;
+    END IF;
+END $$;
+
+-- 10. Add In-House Presets Table
+CREATE TABLE IF NOT EXISTS in_house_presets (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  description text NOT NULL,
+  default_price numeric(10, 2) NOT NULL DEFAULT 0,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Insert dummy data for in-house presets
+INSERT INTO in_house_presets (description, default_price)
+SELECT 'Polishing', 50
+WHERE NOT EXISTS (SELECT 1 FROM in_house_presets WHERE description = 'Polishing');
+
+INSERT INTO in_house_presets (description, default_price)
+SELECT 'Sole Cleaning', 30
+WHERE NOT EXISTS (SELECT 1 FROM in_house_presets WHERE description = 'Sole Cleaning');

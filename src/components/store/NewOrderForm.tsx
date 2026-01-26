@@ -56,6 +56,8 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
     const [clientName, setClientName] = useState("");
     const [whatsapp, setWhatsapp] = useState("");
     const [shoeModel, setShoeModel] = useState("");
+    const [shoeSize, setShoeSize] = useState("");
+    const [shoeColor, setShoeColor] = useState("");
     const [serialNumber, setSerialNumber] = useState("");
     const [orderDate, setOrderDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [selectedComplaints, setSelectedComplaints] = useState<string[]>([]);
@@ -110,6 +112,8 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
         setClientName("");
         setWhatsapp("");
         setShoeModel("");
+        setShoeSize("");
+        setShoeColor("");
         setShoeModel("");
         setSelectedComplaints([]);
         setSelectedInHousePresets([]);
@@ -139,11 +143,11 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
         // Prepare custom complaint string with In-House info if applicable
         let finalCustomComplaint = customComplaint;
         if (isInHouse && selectedInHousePresets.length > 0) {
-             const presetNames = inHousePresets
+            const presetNames = inHousePresets
                 .filter(p => selectedInHousePresets.includes(p.id))
                 .map(p => p.description)
                 .join(", ");
-             finalCustomComplaint = customComplaint 
+            finalCustomComplaint = customComplaint
                 ? `${customComplaint} (In-House: ${presetNames})`
                 : `In-House Services: ${presetNames}`;
         }
@@ -152,10 +156,12 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
             customer_name: clientName,
             whatsapp_number: whatsapp,
             shoe_model: shoeModel,
+            shoe_size: shoeSize,
+            shoe_color: shoeColor,
             serial_number: serialNumber,
             status: "submitted" as const,
             // Allow standard complaints even for in-house
-            complaints: complaints.filter(c => selectedComplaints.includes(c.id)), 
+            complaints: complaints.filter(c => selectedComplaints.includes(c.id)),
             custom_complaint: finalCustomComplaint,
             is_price_unknown: priceUnknown,
             total_price: finalPrice,
@@ -387,9 +393,32 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Size</label>
+                            <input
+                                className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder:text-slate-600"
+                                placeholder="e.g. 42 / 9 / Extra Large"
+                                value={shoeSize}
+                                onChange={(e) => setShoeSize(e.target.value)}
+                                disabled={submitting}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-300">Color</label>
+                            <input
+                                className="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder:text-slate-600"
+                                placeholder="e.g. Black / Tan / White"
+                                value={shoeColor}
+                                onChange={(e) => setShoeColor(e.target.value)}
+                                disabled={submitting}
+                            />
+                        </div>
+                    </div>
+
                     <div className="space-y-3 transition-all duration-300">
                         <div className="flex justify-between items-center">
-                             <label className="text-sm font-medium text-slate-300">Select Complaints (Hub)</label>
+                            <label className="text-sm font-medium text-slate-300">Select Complaints (Hub)</label>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             {complaints.map((c) => (
@@ -515,7 +544,7 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                             </div>
                         </label>
 
-                         {isInHouse && (
+                        {isInHouse && (
                             <div className="pl-8 animate-in fade-in slide-in-from-top-2">
                                 <p className="text-sm font-medium text-slate-300 mb-2">Select In-House Services:</p>
                                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -714,13 +743,12 @@ export function NewOrderForm({ onSuccess, storeId }: { onSuccess: () => void; st
                         </div>
 
                         <div className="mb-4">
-                            <p className="font-semibold text-sm">Shoe Model:</p>
-                            <p className="text-lg">{lastSubmittedOrder.shoe_model}</p>
-                        </div>
-
-                        <div className="mb-4">
-                            <p className="font-semibold text-sm">Serial Number:</p>
-                            <p className="text-lg font-mono">{lastSubmittedOrder.serial_number}</p>
+                            <p className="font-semibold text-sm">Shoe Details:</p>
+                            <p className="text-lg">
+                                {lastSubmittedOrder.shoe_model}
+                                {lastSubmittedOrder.shoe_size && <span className="ml-2">({lastSubmittedOrder.shoe_size})</span>}
+                                {lastSubmittedOrder.shoe_color && <span className="ml-2 text-gray-600">[{lastSubmittedOrder.shoe_color}]</span>}
+                            </p>
                         </div>
 
                         {lastSubmittedOrder.complaints && lastSubmittedOrder.complaints.length > 0 && (

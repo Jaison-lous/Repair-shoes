@@ -33,6 +33,8 @@ export interface Order {
     whatsapp_number: string;
     shoe_model: string;
     serial_number: string;
+    shoe_size?: string;
+    shoe_color?: string;
 
     // Custom complaint logic
     custom_complaint?: string;
