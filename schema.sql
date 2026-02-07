@@ -36,6 +36,7 @@ create table order_complaints (
 );
 
 -- Insert some dummy data for complaints
+INSERT INTO complaints (description, default_price) VALUES
 ('Stitching', 100),
 ('Patch Work', 300);
 
@@ -55,5 +56,15 @@ create table group_expenses (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+
 -- Link Orders to Groups
 alter table orders add column group_id uuid references order_groups(id) on delete set null;
+
+-- In-House Presets Table
+create table if not exists in_house_presets (
+  id uuid default uuid_generate_v4() primary key,
+  description text not null,
+  default_price numeric(10, 2) not null default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+

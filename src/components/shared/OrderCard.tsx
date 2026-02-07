@@ -1,6 +1,6 @@
 import { Order, OrderStatus } from "@/lib/types";
 import { cn, POINTS_TO_CURRENCY } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Hash } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hash, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface OrderCardProps {
@@ -63,18 +63,6 @@ export function OrderCard({ order, onClick, onMoveBack, onMoveNext, userRole = '
     // Show completion checkbox only for store view in final stage
     const showCompletionCheckbox = userRole === 'store' && order.status === 'in_store' && !selectable && onCompletionToggle;
 
-    // Debug logging
-    if (order.status === 'in_store') {
-        console.log('In Store Order:', {
-            orderId: order.id,
-            userRole,
-            status: order.status,
-            selectable,
-            hasToggle: !!onCompletionToggle,
-            showCheckbox: showCompletionCheckbox
-        });
-    }
-
     return (
         <motion.div
             layout
@@ -105,6 +93,24 @@ export function OrderCard({ order, onClick, onMoveBack, onMoveNext, userRole = '
                 </div>
             )}
 
+            {/* Completion Tick Mark (Only for In Store) */}
+            {showCompletionCheckbox && (
+                <div className="absolute right-2 top-2 z-20">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Mark this order as finalized and moved to Profit & Loss?")) {
+                                onCompletionToggle?.(order.id, true);
+                            }
+                        }}
+                        className="p-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white transition-all shadow-lg hover:shadow-emerald-500/50"
+                        title="Mark as Delivered / Finalize"
+                    >
+                        <CheckCircle size={16} />
+                    </button>
+                </div>
+            )}
+
             {/* Content */}
             <div className="pl-1 flex flex-col justify-center min-h-full">
                 {/* Header: Serial Number Primary (Large/White) */}
@@ -125,3 +131,4 @@ export function OrderCard({ order, onClick, onMoveBack, onMoveNext, userRole = '
         </motion.div>
     );
 }
+
